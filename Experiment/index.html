@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title> Integrative Bandit </title>
+    <script src="js/jspsych.js"></script>
+    <script src="js/plugin-html-keyboard-response.js"></script>
+    <script src="js/plugin-image-keyboard-response.js"></script>
+    <script src="js/plugin-fullscreen.js"></script>
+    <script src="js/plugin-html-slider-response.js"></script>
+    <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+</body>
+<script>
+
+// Initialize jsPsych
+const jsPsych = initJsPsych({
+    /*on_finish: function() {
+        jsPsych.data.displayData();
+    }*/
+    //show_progress_bar: true
+});
+
+// Define experiment parameters
+const NUM_TRIALS = 2;
+const NUM_OPTIONS = 2;
+const COSTS = [1, 4];
+const REWARD_PROBABILITIES = [0.5, 0.5];
+
+
+// Generate rewards for all trials
+function generateRewards(numTrials, rewardProbs) {
+    let rewards = [];
+    for (let i = 0; i < numTrials; i++) {
+        let trialRewards = rewardProbs.map((prob, index) => {
+            const success = Math.random() < prob;
+            const gain = success ? 10 : 0;
+            return gain - COSTS[index];
+        });
+        rewards.push(trialRewards);
+    }
+    return rewards;
+}
+const allRewards = generateRewards(NUM_TRIALS, REWARD_PROBABILITIES);
+
+// Create image stimuli
+const unshuffledimages = [
+    'img/arm1.png',
+    'img/arm2.png'
+];
+//shuffle the images
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+const images = shuffleArray([...unshuffledimages]);
+
+
+// fullscreen
+const enterFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: true,
+    message: '<p>The experiment will start in fullscreen mode.</p><p>Click the button below to enter fullscreen mode.</p>',
+    button_label: 'Enter Fullscreen'
+};
+
+// Welcome
+const welcome = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<h1>Welcome to the Collaboration Game</h1><p>[Press any key to continue]</p>',
+    data: {
+        tag: 'welcome'
+    } 
+};
+
+// Instructions
+const instructions = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `    
+        <p><b>In this experiment, you will choose collaboration partners.</b></p>
+        <p>There are two potential collaborators located at different distances:</p>
+        <p>Collaborator 1 is closer and costs 1 point to initiate collaboration</p>
+        <p>Collaborator 2 is further and costs 4 points to initiate collaboration</p>
+        <p>The reliability of each collaborator determines how likely the collaboration will succeed. </p>
+        <p>If the collaboration succeeds, you will gain 10 points. If it fails, you will gain 0 points.</p>
+        <p>Your net gain for each round will be your gain minus the collaboration cost.</p>
+        <p>Your goal is to maximize your total points.</p>
+        <p>You can repeatedly choose between the two collaborators by pressing the corresponding key:</p>    
+        <div style='width: 100%; display: flex; justify-content: center;'>
+            <div style='width: 20%; text-align: center;'>
+                <img src='${images[0]}' style='max-width: 100%;'></img>
+                <p class='small'><strong>Press the 1 key</strong></p>
+                <p class='small'><strong>Cost: 1 point</strong></p>
+            </div>
+            <div style='width: 20%; text-align: center;'>
+                <img src='${images[1]}' style='max-width: 100%;'></img>
+                <p class='small'><strong>Press the 2 key</strong></p>
+                <p class='small'><strong>Cost: 4 points</strong></p>
+            </div>
+        </div>
+        <p>[Press any key to begin]</p>
+    `,
+    data: {
+        tag: 'instructions'
+    }
+};
+
+// Create trial
+function createTrial(trialIndex) {
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: `
+            <div style='width: 100%; display: flex; justify-content: center;'>
+            <div style='width: 40%; text-align: center;'>
+                <img src='${images[0]}' style='max-width: 100%;'></img>
+                <p class='small'><strong>Press the 1 key</strong></p>
+                <p class='small'><strong>Cost: 1 point</strong></p>
+            </div>
+            <div style='width: 40%; text-align: center;'>
+                <img src='${images[1]}' style='max-width: 100%;'></img>
+                <p class='small'><strong>Press the 2 key</strong></p>
+                <p class='small'><strong>Cost: 4 points</strong></p>
+            </div>
+        </div>
+        `,
+        choices: ['1', '2'],
+        on_finish: function(data) {
+            const choice = parseInt(data.response) - 1;
+            const reward = allRewards[trialIndex][choice];
+            data.reward = reward;
+            data.total_reward = jsPsych.data.get().select('reward').sum();
+        },
+        data: {
+            tag: 'trial'
+        }
+    };
+}
+
+// Feedback
+function createFeedback(trialIndex) {
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: function() {
+            const lastTrial = jsPsych.data.get().last(1).values()[0];
+            const selectedImage = images[parseInt(lastTrial.response) - 1];
+            const collaborationResult = lastTrial.reward > 0 ? "Successful" : "Unsuccessful";
+            return `
+                <div style='display: flex; align-items: center; justify-content: center;'>
+                    <img src='${selectedImage}' style='width: 50%; height: 60%; object-fit: contain;'></img>
+                    <div>
+                        <p style='width: 120%;'>You collaborated with Partner ${lastTrial.response}</p>
+                        <p style='width: 120%;'>Collaboration outcome: ${collaborationResult}</p>
+                        <p style='width: 120%;'>Your net gain in this round: ${lastTrial.reward}</p>
+                        <p style='width: 120%;'>Your total points so far: ${lastTrial.total_reward}</p>
+                    </div>
+                    </div>
+                </div>
+                <p>[Press any key to continue]</p>
+            `;
+        },
+        data: {
+            tag: 'feedback'
+        }
+    };
+}
+
+// Create experiment timeline
+let timeline = [enterFullscreen, welcome, instructions];
+
+for (let i = 0; i < NUM_TRIALS; i++) {
+    timeline.push(createTrial(i));
+    timeline.push(createFeedback(i));
+}
+
+// Debrief
+const debrief = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const totalReward = jsPsych.data.get().select('reward').sum();
+        return `
+            <h2>Experiment finished</h2>
+            <p>Your total points: ${totalReward}</p>
+            <p>Thank you for your participation!</p>
+            <p>[Press any key to exit]</p>
+        `;
+    },
+    data: {
+        tag: 'debrief'
+    }
+};
+
+// exit fullscreen
+const exitFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: false
+};
+
+// Create probability rating trials for each arm
+const probabilityRatings = images.map((image, index) => {
+    return {
+        type: jsPsychHtmlSliderResponse,
+        stimulus: `
+            <div style='margin: 2em 0;'>
+                <img src='${image}' style='width: 30%; height: 30%; object-fit: contain;'></img>
+                <p><strong>How reliable is Partner ${index + 1}?</strong></p>
+                <p style='font-size: 0.8em; color: #666;'>(0 = Very unreliable, 100 = Very reliable)</p>
+            </div>
+        `,
+        labels: ['0%', '100%'],
+        slider_width: 500,
+        require_movement: true,
+        data: {
+            tag: `rating_${index + 1}`
+        }
+    };
+});
+
+// Add all probability ratings to timeline
+probabilityRatings.forEach(rating => {
+    timeline.push(rating);
+});
+
+
+timeline.push(debrief);
+timeline.push(exitFullscreen);
+
+// Run experiment
+jsPsych.run(timeline);
+
+</script>
+</html>

@@ -30,6 +30,7 @@ const imageIndices = experiment_setup["IMAGE_INDICES"];
 const NUM_CONTEXTS = experiment_setup["NUM_CONTEXTS"];
 const CONTEXT_INDICES = experiment_setup["CONTEXT_INDICES"];
 
+
 // Initialize jsPsych
 const jsPsych = initJsPsych({
     on_finish: function() {
@@ -110,18 +111,38 @@ const debrief = {
 };
 
 
-//load images
+//load images (context and arm)
+// Function to generate image path from shape-color indices
 function generateImagePath(imageType, shapeColorPair) {
     const [shape, color] = shapeColorPair;
     const folder = imageType === 'arm' ? `${SOCIAL_VERSION}/arm` : 'context';
     return `img/${folder}/${shape}-${color}.png`;
 }
 
+//Context pairs
+// Add function to generate unique context pairs
+function generateUniqueContextPairs(numPairs) {
+    let shapes = Array.from({length: 6}, (_, i) => i + 1);
+    let colors = Array.from({length: 6}, (_, i) => i + 1);
+    
+    // Shuffle arrays
+    shapes = shuffleArray([...shapes]);
+    colors = shuffleArray([...colors]);
+    
+    let pairs = [];
+    for (let i = 0; i < numPairs; i++) {
+        pairs.push([shapes[i], colors[i]]);
+    }
+    return pairs;
+}
+
+// Generate context pairs before image loading
+const contextPairs = generateUniqueContextPairs(NUM_CONTEXTS);
 
 
-// Replace the unshuffledimages definition
+//Arm pairs
 const unshuffledimages = imageIndices.slice(0, NUM_OPTIONS).map(pair => 
-    generateImagePath(SOCIAL_VERSION, pair)
+    generateImagePath('arm', pair)
 );
 
 //shuffle the images
@@ -134,8 +155,19 @@ function shuffleArray(array) {
 }
 const images = shuffleArray([...unshuffledimages]);
 
-
-
+//context names
+const contextNames = shuffleArray([
+  "Nova",
+  "Solis",
+  "Aether",
+  "Zephyr",
+  "Lumis",
+  "Orion",
+  "Astra",
+  "Vora",
+  "Kryos",
+  "Pyra"
+]);
 
 // Instructions
 //social/non-social instruction depends on version; instruction tests are stored in instructions.js
@@ -172,49 +204,32 @@ const instructions = {
     }
 };
 
-
-// Add function to generate unique context pairs
-function generateUniqueContextPairs(numPairs) {
-    let shapes = Array.from({length: 7}, (_, i) => i + 1);
-    let colors = Array.from({length: 7}, (_, i) => i + 1);
-    
-    // Shuffle arrays
-    shapes = shuffleArray([...shapes]);
-    colors = shuffleArray([...colors]);
-    
-    let pairs = [];
-    for (let i = 0; i < numPairs; i++) {
-        pairs.push([shapes[i], colors[i]]);
-    }
-    return pairs;
-}
-
-// Generate context pairs before image loading
-const contextPairs = generateUniqueContextPairs(NUM_CONTEXTS);
-
-console.log(contextPairs);
-
-
 // Create trial
 //auto generate option stimulis based on the number of options
 function createTrial(trialIndex) {
     return {
         type: jsPsychHtmlKeyboardResponse,
-        stimulus: `
-            <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
-                     style='max-width: 150px;'></img>
-                <p><strong>Context ${CONTEXT_INDICES[trialIndex] + 1}</strong></p>
-            </div>
-            <div style='width: 100%; display: flex; justify-content: center;'>
-            ${Array(NUM_OPTIONS).fill().map((_, i) => `
-                <div style='width: 40%; margin: 0 5%; text-align: center;'>
-                    <img src='${images[i]}' style='max-width: 80%;'></img>
-                    <p class='small'><strong>Press key ${i+1}</strong></p>
+        stimulus: function() {
+            // Get current total score
+            const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
+            
+            return `
+                <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
+                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                         style='max-width: 150px;'></img>
+                    <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                    <p>Current Total Score: ${currentTotal}</p>
                 </div>
-            `).join('')}
-            </div>
-        `,
+                <div style='width: 100%; display: flex; justify-content: center;'>
+                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                    <div style='width: 40%; margin: 0 5%; text-align: center;'>
+                        <img src='${images[i]}' style='max-width: 80%;'></img>
+                        <p class='small'><strong>Press key ${i+1}</strong></p>
+                    </div>
+                `).join('')}
+                </div>
+            `;
+        },
         choices: Array(NUM_OPTIONS).fill().map((_, i) => (i + 1).toString()),
         on_finish: function(data) {
             const choice = parseInt(data.response) - 1;
@@ -238,34 +253,40 @@ function createFeedback(trialIndex) {
             const lastTrial = jsPsych.data.get().last(1).values()[0];
             const choice = parseInt(lastTrial.response) - 1;
             
-            // Generate HTML for all options
-            const optionsHtml = Array(NUM_OPTIONS).fill().map((_, i) => `
-                <div style='width: 40%; margin: 0 5%; text-align: center;'>
-                    <img src='${images[i]}' style='max-width: 80%;'></img>
-                    <p class='small'>
-                        ${FULL_FEEDBACK ? 
-                            `Outcome: ${allRewards[trialIndex][i]}` : 
-                            (i === choice ? `Outcome: ${lastTrial.reward}` : '')}
-                    </p>
-                </div>
-            `).join('');
-            
             return `
                 <div>
                     <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
                         <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
                              style='max-width: 150px;'></img>
-                        <p><strong>Context ${CONTEXT_INDICES[trialIndex] + 1}</strong></p>
+                        <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                        <p>Current Total Score: ${lastTrial.total_reward}</p>
                     </div>
                     <div style='width: 100%; display: flex; justify-content: center;'>
-                        ${optionsHtml}
+                        ${images.map((img, index) => {
+                            const isSelected = index === choice;
+                            const reward = allRewards[trialIndex][index];
+                            const showReward = FULL_FEEDBACK || isSelected;
+                            
+                            return `
+                                <div style='width: ${100/NUM_OPTIONS}%; margin: 0 5%; text-align: center;'>
+                                    <div style='${isSelected ? "border: 3px solid #333333; padding: 5px;" : ""}'>
+                                        <img src='${img}' style='width: 80%; object-fit: contain;'></img>
+                                        <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
+                                            `Partner ${index + 1}` : 
+                                            `Option ${index + 1}`}</strong></p>
+                                        ${!isSelected && showReward ? `<p class='small' style='color: #666; font-style: italic;'>
+                                            Forgone outcome: ${reward}
+                                        </p>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                     <div style='text-align: center; margin-top: 20px;'>
                         <p>${SOCIAL_VERSION === 'social' ? 
                             `You chose Partner ${choice + 1}` :
                             `You chose Option ${choice + 1}`}</p>
                         <p>Your gain in this round: ${lastTrial.reward}</p>
-                        <p>Your total score so far: ${lastTrial.total_reward}</p>
                     </div>
                 </div>
                 <p>[Press any key to continue]</p>

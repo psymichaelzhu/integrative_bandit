@@ -176,7 +176,12 @@ const instructions = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const text = instruction_texts[SOCIAL_VERSION];
-        
+        const gapPercentage = 5;
+        const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
+        const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+        const optionWidth = Math.min(10, optionWidth_raw);
+        const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
+             
         return `    
             <p><b>${text.title}</b></p>
             ${text.description.map(line => `<p>${line}</p>`).join('')}
@@ -184,14 +189,13 @@ const instructions = {
                 "You will see the outcomes of all options after each choice, whether or not you chose them." : 
                 "You can only see the outcome of your chosen option after each choice."}</p>  
             <p>${text.choice_text}</p>  
-            <div style='width: 100%; display: flex; justify-content: center;'>
+            <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_OPTIONS).fill().map((_, i) => `
-                <div style='width: 20%; margin: 0 5%; text-align: center;'>
-                    <img src='${images[i]}' style='max-width: 80%;'></img>
+                <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                    <img src='${images[i]}' style='width: 100%;'></img>
                     <p class='small'><strong>Press key ${i+1}</strong></p>
                 </div>
                 `).join('')}
-                </div>
             </div>
             <p>[Press any key to begin]</p>
         `;
@@ -209,21 +213,32 @@ const instructions = {
 function createTrial(trialIndex) {
     return {
         type: jsPsychHtmlKeyboardResponse,
-        stimulus: `
-            <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
-                     style='max-width: 150px;'></img>
-                <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
-            </div>
-            <div style='width: 100%; display: flex; justify-content: center;'>
-            ${Array(NUM_OPTIONS).fill().map((_, i) => `
-                <div style='width: 40%; margin: 0 5%; text-align: center;'>
-                    <img src='${images[i]}' style='max-width: 80%;'></img>
-                    <p class='small'><strong>Press key ${i+1}</strong></p>
+        stimulus: function() {
+            const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
+            const remainingTrials = NUM_TRIALS - trialIndex;
+            const gapPercentage = 5; // Gap between options (5% of screen width)
+            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1); // Total width taken by gaps
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const optionWidth = Math.min(10, optionWidth_raw);
+            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
+            return `
+                <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
+                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                         style='max-width: 150px;'></img>
+                    <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                    <p>Current Total Score: ${currentTotal}</p>
+                    <p>Remaining Trials: ${remainingTrials}</p>
                 </div>
-            `).join('')}
-            </div>
-        `,
+                <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
+                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                    <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                        <img src='${images[i]}' style='width: 100%;'></img>
+                        <p class='small'><strong>Press key ${i+1}</strong></p>
+                    </div>
+                `).join('')}
+                </div>
+            `;
+        },
         choices: Array(NUM_OPTIONS).fill().map((_, i) => (i + 1).toString()),
         on_finish: function(data) {
             const choice = parseInt(data.response) - 1;
@@ -246,45 +261,48 @@ function createFeedback(trialIndex) {
         stimulus: function() {
             const lastTrial = jsPsych.data.get().last(1).values()[0];
             const choice = parseInt(lastTrial.response) - 1;
-            const collaborationResult = lastTrial.reward > 0 ? "Successful" : "Unsuccessful";
+            const remainingTrials = NUM_TRIALS - trialIndex;
+            const gapPercentage = 5;
+            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const optionWidth = Math.min(10, optionWidth_raw);
+            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
             
-            // Create feedback display for all options
-            const optionsHtml = images.map((img, index) => {
-                const isSelected = index === choice;
-                const reward = allRewards[trialIndex][index];
-                const showReward = FULL_FEEDBACK || isSelected;
-                
-                return `
-                    <div style='width: ${100/NUM_OPTIONS}%; margin: 0 5%; text-align: center;'>
-                        <div style='${isSelected ? "border: 3px solid #333333; padding: 5px;" : ""}'>
-                            <img src='${img}' style='width: 80%; object-fit: contain;'></img>
-                            <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
-                                `Partner ${index + 1}` : 
-                                `Option ${index + 1}`}</strong></p>
-                            ${!isSelected && showReward ? `<p class='small' style='color: #666; font-style: italic;'>
-                                Forgone outcome: ${reward}
-                            </p>` : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
             return `
                 <div>
                     <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
                         <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
                              style='max-width: 150px;'></img>
                         <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                        <p>Current Total Score: ${lastTrial.total_reward}</p>
+                        <p>Remaining Trials: ${remainingTrials-1}</p>
                     </div>
-                    <div style='width: 100%; display: flex; justify-content: center;'>
-                        ${optionsHtml}
+                    <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
+                        ${images.map((img, index) => {
+                            const isSelected = index === choice;
+                            const reward = allRewards[trialIndex][index];
+                            const showReward = FULL_FEEDBACK || isSelected;
+                            
+                            return `
+                                <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                                    <div style='${isSelected ? "border: 3px solid #333333; padding: 5px;" : ""}'>
+                                        <img src='${img}' style='width: 100%; object-fit: contain;'></img>
+                                        <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
+                                            `Partner ${index + 1}` : 
+                                            `Option ${index + 1}`}</strong></p>
+                                        ${!isSelected && showReward ? `<p class='small' style='color: #666; font-style: italic;'>
+                                            Forgone outcome: ${reward}
+                                        </p>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                     <div style='text-align: center; margin-top: 20px;'>
                         <p>${SOCIAL_VERSION === 'social' ? 
                             `You chose Partner ${choice + 1}` :
                             `You chose Option ${choice + 1}`}</p>
                         <p>Your gain in this round: ${lastTrial.reward}</p>
-                        <p>Your total score so far: ${lastTrial.total_reward}</p>
                     </div>
                 </div>
                 <p>[Press any key to continue]</p>

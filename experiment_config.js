@@ -1,6 +1,6 @@
 const experiment_setup={
       "NUM_TRIALS": 4,
-      "NUM_OPTIONS": 3,
+      "NUM_OPTIONS": 8,
       "NAME": "Integrative Bandit",
       "SOCIAL_VERSION": "non_social",
       "REWARD_PROBABILITIES": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5,0.5,0.5],
@@ -18,7 +18,7 @@ const experiment_setup={
         [1, 1, 1, 1, 1, 1, 1, 1]
     ],
     // Add this to your experiment configuration
-    "FULL_FEEDBACK": false, // or false for contingent feedback
+    "FULL_FEEDBACK": true, // or false for contingent feedback
     "IMAGE_INDICES": [
       [1,1], 
       [1,4], 

@@ -290,8 +290,8 @@ function createFeedback(trialIndex) {
                                         <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
                                             `Partner ${index + 1}` : 
                                             `Option ${index + 1}`}</strong></p>
-                                        ${!isSelected && showReward ? `<p class='small' style='color: #666; font-style: italic;'>
-                                            Forgone outcome: ${reward}
+                                        ${showReward ? `<p class='small' style='${isSelected ? 'font-weight: bold;' : 'color: #666; font-style: italic;'}'>
+                                            ${isSelected ? `Outcome: ${reward}` : `Forgone outcome: ${reward}`}
                                         </p>` : ''}
                                     </div>
                                 </div>
@@ -327,7 +327,7 @@ const probabilityRatings = images.map((image, index) => {
                 <img src='${image}' style='width: 30%; height: 30%; object-fit: contain;'></img>
                 <p><strong>${SOCIAL_VERSION === 'social' ? 
                     `How reliable is Partner ${index + 1}?` : 
-                    `How rewarding is Option ${index + 1}?`}</strong></p>
+                    `How rewarding is Box ${index + 1}?`}</strong></p>
                 <p style='font-size: 0.8em; color: #666;'>${SOCIAL_VERSION === 'social' ?
                     '(0 = Very unreliable, 100 = Very reliable)' :
                     '(0 = Very bad, 100 = Very good)'}</p>

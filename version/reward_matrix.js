@@ -1,0 +1,8 @@
+var NUM_OPTIONS = "3";
+
+NUM_OPTIONS = JSON.parse(NUM_OPTIONS);
+
+var NUM_TRIALS = "5";
+
+NUM_TRIALS = JSON.parse(NUM_TRIALS);
+

@@ -8,47 +8,143 @@
     <script src="js/plugin-image-keyboard-response.js"></script>
     <script src="js/plugin-fullscreen.js"></script>
     <script src="js/plugin-html-slider-response.js"></script>
+    <script src="instructions.js"></script>
+    <script src="experiment_config.js"></script>
     <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
 </body>
 <script>
 
+// Define experiment parameters
+
+var NUM_TRIALS = experiment_setup["NUM_TRIALS"];
+var NUM_OPTIONS = experiment_setup["NUM_OPTIONS"];
+const REWARD_PROBABILITIES = experiment_setup["REWARD_PROBABILITIES"]; //
+const NAME = experiment_setup["NAME"];
+const SOCIAL_VERSION = experiment_setup["SOCIAL_VERSION"]; 
+// If REWARD_MATRIX is already in the correct format (nested arrays)
+const allRewards = experiment_setup["REWARD_MATRIX"];
+const FULL_FEEDBACK = experiment_setup["FULL_FEEDBACK"];
+const imageIndices = experiment_setup["IMAGE_INDICES"];
+const NUM_CONTEXTS = experiment_setup["NUM_CONTEXTS"];
+const CONTEXT_INDICES = experiment_setup["CONTEXT_INDICES"];
+
+
 // Initialize jsPsych
 const jsPsych = initJsPsych({
-    /*on_finish: function() {
-        jsPsych.data.displayData();
-    }*/
-    //show_progress_bar: true
+    on_finish: function() {
+        // Get all data and ignore multiple columns
+        var all_data = jsPsych.data.get()
+            .ignore([
+            'stimulus',
+            'trial_type',
+            'internal_node_id',
+            'view_history',
+            'time_elapsed',
+            'response_label',
+            'slider_start',
+            'success',
+            'trial_index',
+            'plugin_version',
+            'total_reward'
+        ])
+        .filter([{tag: 'trial'}, {tag: 'rating'}]);
+
+        // Download CSV file
+        const filename = `bandit_data_${Date.now()}.csv`;
+        all_data.localSave('csv', filename);
+        
+        // Also log to console for debugging
+        console.log(all_data.csv());
+    },
+    show_progress_bar: true
 });
 
-// Define experiment parameters
-const NUM_TRIALS = 2;
-const NUM_OPTIONS = 2;
-const COSTS = [1, 4];
-const REWARD_PROBABILITIES = [0.5, 0.5];
-
-
-// Generate rewards for all trials
-function generateRewards(numTrials, rewardProbs) {
-    let rewards = [];
-    for (let i = 0; i < numTrials; i++) {
-        let trialRewards = rewardProbs.map((prob, index) => {
-            const success = Math.random() < prob;
-            const gain = success ? 10 : 0;
-            return gain - COSTS[index];
-        });
-        rewards.push(trialRewards);
+// fullscreen
+const enterFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: true,
+    message: '<p>The experiment will start in fullscreen mode.</p><p>Click the button below to enter fullscreen mode.</p>',
+    button_label: 'Enter Fullscreen',
+    data: {
+        tag: 'enter_fullscreen'
     }
-    return rewards;
-}
-const allRewards = generateRewards(NUM_TRIALS, REWARD_PROBABILITIES);
+};
 
-// Create image stimuli
-const unshuffledimages = [
-    'img/arm1.png',
-    'img/arm2.png'
-];
+
+// exit fullscreen
+const exitFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: false,
+    data: {
+        tag: 'exit_fullscreen'
+    }
+};
+
+
+// Welcome
+const welcome = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<h1>Welcome to the ${NAME} game</h1><p>[Press any key to continue]</p>`,
+    data: {
+        tag: 'welcome'
+    } 
+};
+
+
+// Debrief
+const debrief = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const totalReward = jsPsych.data.get().select('reward').sum();
+        return `
+            <h2>Experiment finished</h2>
+            <p>Your total score: ${totalReward}</p>
+            <p>Thank you for your participation!</p>
+            <p>[Press any key to exit]</p>
+        `;
+    },
+    data: {
+        tag: 'debrief'
+    }
+};
+
+
+//load images (context and arm)
+// Function to generate image path from shape-color indices
+function generateImagePath(imageType, shapeColorPair) {
+    const [shape, color] = shapeColorPair;
+    const folder = imageType === 'arm' ? `${SOCIAL_VERSION}/arm` : 'context';
+    return `img/${folder}/${shape}-${color}.png`;
+}
+
+//Context pairs
+// Add function to generate unique context pairs
+function generateUniqueContextPairs(numPairs) {
+    let shapes = Array.from({length: 6}, (_, i) => i + 1);
+    let colors = Array.from({length: 6}, (_, i) => i + 1);
+    
+    // Shuffle arrays
+    shapes = shuffleArray([...shapes]);
+    colors = shuffleArray([...colors]);
+    
+    let pairs = [];
+    for (let i = 0; i < numPairs; i++) {
+        pairs.push([shapes[i], colors[i]]);
+    }
+    return pairs;
+}
+
+// Generate context pairs before image loading
+const contextPairs = generateUniqueContextPairs(NUM_CONTEXTS);
+
+
+//Arm pairs
+const unshuffledimages = imageIndices.slice(0, NUM_OPTIONS).map(pair => 
+    generateImagePath('arm', pair)
+);
+
 //shuffle the images
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
@@ -59,79 +155,81 @@ function shuffleArray(array) {
 }
 const images = shuffleArray([...unshuffledimages]);
 
-
-// fullscreen
-const enterFullscreen = {
-    type: jsPsychFullscreen,
-    fullscreen_mode: true,
-    message: '<p>The experiment will start in fullscreen mode.</p><p>Click the button below to enter fullscreen mode.</p>',
-    button_label: 'Enter Fullscreen'
-};
-
-// Welcome
-const welcome = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: '<h1>Welcome to the Collaboration Game</h1><p>[Press any key to continue]</p>',
-    data: {
-        tag: 'welcome'
-    } 
-};
+//context names
+const contextNames = shuffleArray([
+  "Nova",
+  "Solis",
+  "Aether",
+  "Zephyr",
+  "Lumis",
+  "Orion",
+  "Astra",
+  "Vora",
+  "Kryos",
+  "Pyra"
+]);
 
 // Instructions
+//social/non-social instruction depends on version; instruction tests are stored in instructions.js
+//auto generate option stimulis based on the number of options
 const instructions = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `    
-        <p><b>In this experiment, you will choose collaboration partners.</b></p>
-        <p>There are two potential collaborators located at different distances:</p>
-        <p>Collaborator 1 is closer and costs 1 point to initiate collaboration</p>
-        <p>Collaborator 2 is further and costs 4 points to initiate collaboration</p>
-        <p>The reliability of each collaborator determines how likely the collaboration will succeed. </p>
-        <p>If the collaboration succeeds, you will gain 10 points. If it fails, you will gain 0 points.</p>
-        <p>Your net gain for each round will be your gain minus the collaboration cost.</p>
-        <p>Your goal is to maximize your total points.</p>
-        <p>You can repeatedly choose between the two collaborators by pressing the corresponding key:</p>    
-        <div style='width: 100%; display: flex; justify-content: center;'>
-            <div style='width: 20%; text-align: center;'>
-                <img src='${images[0]}' style='max-width: 100%;'></img>
-                <p class='small'><strong>Press the 1 key</strong></p>
-                <p class='small'><strong>Cost: 1 point</strong></p>
+    stimulus: function() {
+        const text = instruction_texts[SOCIAL_VERSION];
+        
+        return `    
+            <p><b>${text.title}</b></p>
+            ${text.description.map(line => `<p>${line}</p>`).join('')}
+            <p>${FULL_FEEDBACK ? 
+                "You will see the outcomes of all options after each choice, whether or not you chose them." : 
+                "You can only see the outcome of your chosen option after each choice."}</p>  
+            <p>${text.choice_text}</p>  
+            <div style='width: 100%; display: flex; justify-content: center;'>
+                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                <div style='width: 20%; margin: 0 5%; text-align: center;'>
+                    <img src='${images[i]}' style='max-width: 80%;'></img>
+                    <p class='small'><strong>Press key ${i+1}</strong></p>
+                </div>
+                `).join('')}
+                </div>
             </div>
-            <div style='width: 20%; text-align: center;'>
-                <img src='${images[1]}' style='max-width: 100%;'></img>
-                <p class='small'><strong>Press the 2 key</strong></p>
-                <p class='small'><strong>Cost: 4 points</strong></p>
-            </div>
-        </div>
-        <p>[Press any key to begin]</p>
-    `,
-    data: {
-        tag: 'instructions'
+            <p>[Press any key to begin]</p>
+        `;
+    },
+    data: function() {
+        return {
+            tag: 'instructions',
+            version: SOCIAL_VERSION
+        };
     }
 };
 
 // Create trial
+//auto generate option stimulis based on the number of options
 function createTrial(trialIndex) {
     return {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: `
+            <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
+                <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                     style='max-width: 150px;'></img>
+                <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+            </div>
             <div style='width: 100%; display: flex; justify-content: center;'>
-            <div style='width: 40%; text-align: center;'>
-                <img src='${images[0]}' style='max-width: 100%;'></img>
-                <p class='small'><strong>Press the 1 key</strong></p>
-                <p class='small'><strong>Cost: 1 point</strong></p>
+            ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                <div style='width: 40%; margin: 0 5%; text-align: center;'>
+                    <img src='${images[i]}' style='max-width: 80%;'></img>
+                    <p class='small'><strong>Press key ${i+1}</strong></p>
+                </div>
+            `).join('')}
             </div>
-            <div style='width: 40%; text-align: center;'>
-                <img src='${images[1]}' style='max-width: 100%;'></img>
-                <p class='small'><strong>Press the 2 key</strong></p>
-                <p class='small'><strong>Cost: 4 points</strong></p>
-            </div>
-        </div>
         `,
-        choices: ['1', '2'],
+        choices: Array(NUM_OPTIONS).fill().map((_, i) => (i + 1).toString()),
         on_finish: function(data) {
             const choice = parseInt(data.response) - 1;
             const reward = allRewards[trialIndex][choice];
             data.reward = reward;
+            data.context = CONTEXT_INDICES[trialIndex];
             data.total_reward = jsPsych.data.get().select('reward').sum();
         },
         data: {
@@ -140,33 +238,93 @@ function createTrial(trialIndex) {
     };
 }
 
+
 // Feedback
 function createFeedback(trialIndex) {
     return {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: function() {
             const lastTrial = jsPsych.data.get().last(1).values()[0];
-            const selectedImage = images[parseInt(lastTrial.response) - 1];
+            const choice = parseInt(lastTrial.response) - 1;
             const collaborationResult = lastTrial.reward > 0 ? "Successful" : "Unsuccessful";
-            return `
-                <div style='display: flex; align-items: center; justify-content: center;'>
-                    <img src='${selectedImage}' style='width: 50%; height: 60%; object-fit: contain;'></img>
-                    <div>
-                        <p style='width: 120%;'>You collaborated with Partner ${lastTrial.response}</p>
-                        <p style='width: 120%;'>Collaboration outcome: ${collaborationResult}</p>
-                        <p style='width: 120%;'>Your net gain in this round: ${lastTrial.reward}</p>
-                        <p style='width: 120%;'>Your total points so far: ${lastTrial.total_reward}</p>
+            
+            // Create feedback display for all options
+            const optionsHtml = images.map((img, index) => {
+                const isSelected = index === choice;
+                const reward = allRewards[trialIndex][index];
+                const showReward = FULL_FEEDBACK || isSelected;
+                
+                return `
+                    <div style='width: ${100/NUM_OPTIONS}%; margin: 0 5%; text-align: center;'>
+                        <div style='${isSelected ? "border: 3px solid #333333; padding: 5px;" : ""}'>
+                            <img src='${img}' style='width: 80%; object-fit: contain;'></img>
+                            <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
+                                `Partner ${index + 1}` : 
+                                `Option ${index + 1}`}</strong></p>
+                            ${!isSelected && showReward ? `<p class='small' style='color: #666; font-style: italic;'>
+                                Forgone outcome: ${reward}
+                            </p>` : ''}
+                        </div>
                     </div>
+                `;
+            }).join('');
+
+            return `
+                <div>
+                    <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
+                        <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                             style='max-width: 150px;'></img>
+                        <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                    </div>
+                    <div style='width: 100%; display: flex; justify-content: center;'>
+                        ${optionsHtml}
+                    </div>
+                    <div style='text-align: center; margin-top: 20px;'>
+                        <p>${SOCIAL_VERSION === 'social' ? 
+                            `You chose Partner ${choice + 1}` :
+                            `You chose Option ${choice + 1}`}</p>
+                        <p>Your gain in this round: ${lastTrial.reward}</p>
+                        <p>Your total score so far: ${lastTrial.total_reward}</p>
                     </div>
                 </div>
                 <p>[Press any key to continue]</p>
             `;
         },
         data: {
-            tag: 'feedback'
+            tag: 'feedback',
+            context: CONTEXT_INDICES[trialIndex]
         }
     };
 }
+
+
+
+
+// Create probability rating trials for each arm
+const probabilityRatings = images.map((image, index) => {
+    return {
+        type: jsPsychHtmlSliderResponse,
+        stimulus: `
+            <div style='margin: 2em 0;'>
+                <img src='${image}' style='width: 30%; height: 30%; object-fit: contain;'></img>
+                <p><strong>${SOCIAL_VERSION === 'social' ? 
+                    `How reliable is Partner ${index + 1}?` : 
+                    `How rewarding is Option ${index + 1}?`}</strong></p>
+                <p style='font-size: 0.8em; color: #666;'>${SOCIAL_VERSION === 'social' ?
+                    '(0 = Very unreliable, 100 = Very reliable)' :
+                    '(0 = Very bad, 100 = Very good)'}</p>
+            </div>
+        `,
+        labels: ['0%', '100%'],
+        slider_width: 500,
+        require_movement: true,
+        data: {
+            tag: `rating`,
+            arm: index + 1
+        }
+    };
+});
+
 
 // Create experiment timeline
 let timeline = [enterFullscreen, welcome, instructions];
@@ -176,57 +334,12 @@ for (let i = 0; i < NUM_TRIALS; i++) {
     timeline.push(createFeedback(i));
 }
 
-// Debrief
-const debrief = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const totalReward = jsPsych.data.get().select('reward').sum();
-        return `
-            <h2>Experiment finished</h2>
-            <p>Your total points: ${totalReward}</p>
-            <p>Thank you for your participation!</p>
-            <p>[Press any key to exit]</p>
-        `;
-    },
-    data: {
-        tag: 'debrief'
-    }
-};
-
-// exit fullscreen
-const exitFullscreen = {
-    type: jsPsychFullscreen,
-    fullscreen_mode: false
-};
-
-// Create probability rating trials for each arm
-const probabilityRatings = images.map((image, index) => {
-    return {
-        type: jsPsychHtmlSliderResponse,
-        stimulus: `
-            <div style='margin: 2em 0;'>
-                <img src='${image}' style='width: 30%; height: 30%; object-fit: contain;'></img>
-                <p><strong>How reliable is Partner ${index + 1}?</strong></p>
-                <p style='font-size: 0.8em; color: #666;'>(0 = Very unreliable, 100 = Very reliable)</p>
-            </div>
-        `,
-        labels: ['0%', '100%'],
-        slider_width: 500,
-        require_movement: true,
-        data: {
-            tag: `rating_${index + 1}`
-        }
-    };
-});
-
 // Add all probability ratings to timeline
 probabilityRatings.forEach(rating => {
     timeline.push(rating);
 });
 
-
-timeline.push(debrief);
-timeline.push(exitFullscreen);
+timeline.push([debrief, exitFullscreen]);
 
 // Run experiment
 jsPsych.run(timeline);

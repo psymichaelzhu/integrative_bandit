@@ -4,7 +4,7 @@ const experiment_setup={
     "NAME": "Celestara Universe",
     "SOCIAL_VERSION": "non_social",
     "REWARD_PROBABILITIES": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5,0.5,0.5],
-    "DISTRIBUTION": "bernoulli",
+    "REWARD_TYPE": "numeric",
     "REWARD_MATRIX": [
       [1, 0, 1, 0, 0, 0, 0, 0],
       [1, 1, 1, 1, 2, 0, 0, 0],

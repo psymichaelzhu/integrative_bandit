@@ -1,10 +1,10 @@
 const experiment_setup={
-    "NUM_TRIALS": 4,
+    "NUM_TRIALS": 8,
     "NUM_OPTIONS": 4,
     "NAME": "Celestara Universe",
     "SOCIAL_VERSION": "social",
     "REWARD_PROBABILITIES": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5,0.5,0.5],
-    "DISTRIBUTION": "bernoulli",
+    "REWARD_TYPE": "binary",
     "REWARD_MATRIX": [
       [1, 0, 1, 0, 0, 0, 0, 0],
       [1, 1, 1, 1, 2, 0, 0, 0],

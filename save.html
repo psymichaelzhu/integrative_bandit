@@ -9,7 +9,7 @@
     <script src="js/plugin-fullscreen.js"></script>
     <script src="js/plugin-html-slider-response.js"></script>
     <script src="instructions.js"></script>
-    <script src="experiment_config.js"></script>
+    <script src="HT.js"></script>
     <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
@@ -17,22 +17,22 @@
 <script>
 
 // Define experiment parameters
-
 var NUM_TRIALS = experiment_setup["NUM_TRIALS"];
 var NUM_OPTIONS = experiment_setup["NUM_OPTIONS"];
 const REWARD_PROBABILITIES = experiment_setup["REWARD_PROBABILITIES"]; //
 const NAME = experiment_setup["NAME"];
 const SOCIAL_VERSION = experiment_setup["SOCIAL_VERSION"]; 
-// If REWARD_MATRIX is already in the correct format (nested arrays)
 const allRewards = experiment_setup["REWARD_MATRIX"];
 const FULL_FEEDBACK = experiment_setup["FULL_FEEDBACK"];
 const imageIndices = experiment_setup["IMAGE_INDICES"];
+const NUM_CONTEXTS = experiment_setup["NUM_CONTEXTS"];
+const CONTEXT_INDICES = experiment_setup["CONTEXT_INDICES"];
+const NUM_FORCED_TRIALS = experiment_setup["NUM_FORCED_TRIALS"];
+const FORCED_CHOICE_SEQUENCE = experiment_setup["FORCED_CHOICE_SEQUENCE"];
 
 
-//general experimental procedure
-//load parameters from other files
 
-// Initialize jsPsych
+// Initialize
 const jsPsych = initJsPsych({
     on_finish: function() {
         // Get all data and ignore multiple columns
@@ -61,8 +61,6 @@ const jsPsych = initJsPsych({
     },
     show_progress_bar: true
 });
-
-// fullscreen
 const enterFullscreen = {
     type: jsPsychFullscreen,
     fullscreen_mode: true,
@@ -72,9 +70,6 @@ const enterFullscreen = {
         tag: 'enter_fullscreen'
     }
 };
-
-
-// exit fullscreen
 const exitFullscreen = {
     type: jsPsychFullscreen,
     fullscreen_mode: false,
@@ -82,19 +77,13 @@ const exitFullscreen = {
         tag: 'exit_fullscreen'
     }
 };
-
-
-// Welcome
 const welcome = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `<h1>Welcome to the ${NAME} game</h1><p>[Press any key to continue]</p>`,
+    stimulus: `<h1>Welcome to the ${NAME}</h1><p>[Press any key to continue]</p>`,
     data: {
         tag: 'welcome'
     } 
 };
-
-
-// Debrief
 const debrief = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
@@ -112,19 +101,47 @@ const debrief = {
 };
 
 
-//load images
-// Function to generate image path from shape-color indices
-function generateImagePath(SOCIAL_VERSION, shapeColorPair) {
+//load images (context and arm)
+function generateImagePath(imageType, shapeColorPair) {
     const [shape, color] = shapeColorPair;
-    return `img/${SOCIAL_VERSION}/arm/${shape}-${color}.png`;
+    const folder = imageType === 'arm' ? `${SOCIAL_VERSION}/arm` : 'context';
+    return `img/${folder}/${shape}-${color}.png`;
 }
 
-// Replace the unshuffledimages definition
-const unshuffledimages = imageIndices.slice(0, NUM_OPTIONS).map(pair => 
-    generateImagePath(SOCIAL_VERSION, pair)
-);
+//Context pairs
+function generateUniqueContextPairs(numPairs) {
+    let shapes = Array.from({length: 6}, (_, i) => i + 1);
+    let colors = Array.from({length: 6}, (_, i) => i + 1);
+    
+    // Shuffle arrays
+    shapes = shuffleArray([...shapes]);
+    colors = shuffleArray([...colors]);
+    
+    let pairs = [];
+    for (let i = 0; i < numPairs; i++) {
+        pairs.push([shapes[i], colors[i]]);
+    }
+    return pairs;
+}
+const contextPairs = generateUniqueContextPairs(NUM_CONTEXTS);
 
-//shuffle the images
+const contextNames = shuffleArray([
+  "Nova",
+  "Solis",
+  "Aether",
+  "Zephyr",
+  "Lumis",
+  "Orion",
+  "Astra",
+  "Vora",
+  "Kryos",
+  "Pyra"
+]);
+
+//Arm pairs
+const unshuffledimages = imageIndices.slice(0, NUM_OPTIONS).map(pair => 
+    generateImagePath('arm', pair)
+);
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -136,30 +153,33 @@ const images = shuffleArray([...unshuffledimages]);
 
 
 
-
 // Instructions
-//social/non-social instruction depends on version; instruction tests are stored in instructions.js
-//auto generate option stimulis based on the number of options
 const instructions = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const text = instruction_texts[SOCIAL_VERSION];
-        
+        const gapPercentage = 5;
+        const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
+        const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+        const optionWidth = Math.min(10, optionWidth_raw);
+        const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
+             
         return `    
             <p><b>${text.title}</b></p>
+            <p>Your supplement is limited and can only stay for ${NUM_TRIALS+NUM_FORCED_TRIALS} days.</p>
             ${text.description.map(line => `<p>${line}</p>`).join('')}
+            <p>You will be transported between ${NUM_CONTEXTS} different planets.</p>
             <p>${FULL_FEEDBACK ? 
-                "You will see the outcomes of all options after each choice, whether or not you chose them." : 
-                "You can only see the outcome of your chosen option after each choice."}</p>  
-            <p>${text.choice_text}</p>  
-            <div style='width: 100%; display: flex; justify-content: center;'>
+                `You will see the outcomes of all ${SOCIAL_VERSION === 'social' ? 'aliens' : 'ores'} after each choice, whether or not you chose them.` : 
+                `You can only see the outcome of your chosen ${SOCIAL_VERSION === 'social' ? 'alien' : 'ore'} after each choice.`}</p>
+            ${text.choice_text.map(line => `<p>${line}</p>`).join('')}
+            <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_OPTIONS).fill().map((_, i) => `
-                <div style='width: 20%; margin: 0 5%; text-align: center;'>
-                    <img src='${images[i]}' style='max-width: 80%;'></img>
-                    <p class='small'><strong>Press key ${i+1}</strong></p>
+                <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                    <img src='${images[i]}' style='width: 100%;'></img>
+                    <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${i+1}</strong></p>
                 </div>
                 `).join('')}
-                </div>
             </div>
             <p>[Press any key to begin]</p>
         `;
@@ -173,25 +193,41 @@ const instructions = {
 };
 
 // Create trial
-//auto generate option stimulis based on the number of options
 function createTrial(trialIndex) {
     return {
         type: jsPsychHtmlKeyboardResponse,
-        stimulus: `
-            <div style='width: 100%; display: flex; justify-content: center;'>
-            ${Array(NUM_OPTIONS).fill().map((_, i) => `
-                <div style='width: 40%; margin: 0 5%; text-align: center;'>
-                    <img src='${images[i]}' style='max-width: 80%;'></img>
-                    <p class='small'><strong>Press key ${i+1}</strong></p>
+        stimulus: function() {
+            const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
+            const remainingTrials = NUM_FORCED_TRIALS+NUM_TRIALS - trialIndex;
+            const gapPercentage = 5; // Gap between options (5% of screen width)
+            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1); // Total width taken by gaps
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const optionWidth = Math.min(10, optionWidth_raw);
+            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
+            return `
+                <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
+                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                         style='max-width: 150px;'></img>
+                    <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                    <p>Current Total Aetherium: ${currentTotal}</p>
+                    <p>Remaining Days: ${remainingTrials}</p>
                 </div>
-            `).join('')}
-        </div>
-        `,
+                <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
+                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                    <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                        <img src='${images[i]}' style='width: 100%;'></img>
+                        <p class='small'><strong>Press key ${i+1}</strong></p>
+                    </div>
+                `).join('')}
+                </div>
+            `;
+        },
         choices: Array(NUM_OPTIONS).fill().map((_, i) => (i + 1).toString()),
         on_finish: function(data) {
             const choice = parseInt(data.response) - 1;
             const reward = allRewards[trialIndex][choice];
             data.reward = reward;
+            data.context = CONTEXT_INDICES[trialIndex];
             data.total_reward = jsPsych.data.get().select('reward').sum();
         },
         data: {
@@ -200,7 +236,6 @@ function createTrial(trialIndex) {
     };
 }
 
-
 // Feedback
 function createFeedback(trialIndex) {
     return {
@@ -208,55 +243,61 @@ function createFeedback(trialIndex) {
         stimulus: function() {
             const lastTrial = jsPsych.data.get().last(1).values()[0];
             const choice = parseInt(lastTrial.response) - 1;
-            const collaborationResult = lastTrial.reward > 0 ? "Successful" : "Unsuccessful";
+            const remainingTrials = NUM_FORCED_TRIALS+NUM_TRIALS - trialIndex;
+            const gapPercentage = 5;
+            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const optionWidth = Math.min(10, optionWidth_raw);
+            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
             
-            // Create feedback display for all options
-            const optionsHtml = images.map((img, index) => {
-                const isSelected = index === choice;
-                const reward = allRewards[trialIndex][index];
-                const showReward = FULL_FEEDBACK || isSelected;
-                
-                return `
-                    <div style='width: ${100/NUM_OPTIONS}%; margin: 0 5%; text-align: center;'>
-                        <div style='${isSelected ? "border: 3px solid #FFD700; padding: 5px;" : ""}'>
-                            <img src='${img}' style='width: 80%; object-fit: contain;'></img>
-                            <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
-                                `Partner ${index + 1}` : 
-                                `Option ${index + 1}`}</strong></p>
-                            ${!isSelected && showReward ? `<p class='small' style='color: #666; font-style: italic;'>
-                                Forgone outcome: ${reward}
-                            </p>` : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
             return `
                 <div>
-                    <div style='width: 100%; display: flex; justify-content: center;'>
-                        ${optionsHtml}
+                    <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
+                        <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                             style='max-width: 150px;'></img>
+                        <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                        <p>Current Total Aetherium: ${lastTrial.total_reward}</p>
+                        <p>Remaining Days: ${remainingTrials-1}</p>
+                    </div>
+                    <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
+                        ${images.map((img, index) => {
+                            const isSelected = index === choice;
+                            const reward = allRewards[trialIndex][index];
+                            const showReward = FULL_FEEDBACK || isSelected;
+                            
+                            return `
+                                <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                                    <div style='${isSelected ? "border: 3px solid #333333; padding: 5px;" : ""}'>
+                                        <img src='${img}' style='width: 100%; object-fit: contain;'></img>
+                                        <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
+                                            `Alien ${index + 1}` : 
+                                            `Ore ${index + 1}`}</strong></p>
+                                        ${showReward ? `<p class='small' style='${isSelected ? 'font-weight: bold;' : 'color: #666; font-style: italic;'}'>
+                                            ${isSelected ? `Outcome: ${reward}` : `Forgone outcome: ${reward}`}
+                                        </p>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                     <div style='text-align: center; margin-top: 20px;'>
                         <p>${SOCIAL_VERSION === 'social' ? 
-                            `You chose Partner ${choice + 1}` :
-                            `You chose Option ${choice + 1}`}</p>
-                        <p>Your gain in this round: ${lastTrial.reward}</p>
-                        <p>Your total score so far: ${lastTrial.total_reward}</p>
+                            `You chose Alien ${choice + 1}` :
+                            `You chose Ore ${choice + 1}`}</p>
+                        <p>You gained ${lastTrial.reward} Aetherium in this round</p>
                     </div>
                 </div>
                 <p>[Press any key to continue]</p>
             `;
         },
         data: {
-            tag: 'feedback'
+            tag: 'feedback',
+            context: CONTEXT_INDICES[trialIndex]
         }
     };
 }
 
-
-
-
-// Create probability rating trials for each arm
+// Rating for each arm
 const probabilityRatings = images.map((image, index) => {
     return {
         type: jsPsychHtmlSliderResponse,
@@ -264,10 +305,10 @@ const probabilityRatings = images.map((image, index) => {
             <div style='margin: 2em 0;'>
                 <img src='${image}' style='width: 30%; height: 30%; object-fit: contain;'></img>
                 <p><strong>${SOCIAL_VERSION === 'social' ? 
-                    `How reliable is Partner ${index + 1}?` : 
-                    `How rewarding is Option ${index + 1}?`}</strong></p>
+                    `How generous is Alien ${index + 1}?` : 
+                    `How rewarding is Ore ${index + 1}?`}</strong></p>
                 <p style='font-size: 0.8em; color: #666;'>${SOCIAL_VERSION === 'social' ?
-                    '(0 = Very unreliable, 100 = Very reliable)' :
+                    '(0 = Very stingy, 100 = Very generous)' :
                     '(0 = Very bad, 100 = Very good)'}</p>
             </div>
         `,
@@ -281,21 +322,110 @@ const probabilityRatings = images.map((image, index) => {
     };
 });
 
+// forced choice trial
+function createForcedChoiceTrial(trialIndex, forcedChoice) {
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        stimulus: function() {
+            const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
+            const gapPercentage = 5;
+            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const optionWidth = Math.min(10, optionWidth_raw);
+            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
+            return `
+                <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
+                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                         style='max-width: 150px;'></img>
+                    <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                    <p>Current Total Aetherium: ${currentTotal}</p>
+                    <p style="color: red; font-weight: bold;">Please select ${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
+                </div>
+                <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
+                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                    <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                        <img src='${images[i]}' style='width: 100%;'></img>
+                        <p class='small'><strong>Press key ${i+1}</strong></p>
+                    </div>
+                `).join('')}
+                </div>
+            `;
+        },
+        choices: Array(NUM_OPTIONS).fill().map((_, i) => (i + 1).toString()),
+        data: {
+            tag: 'forced_trial',
+            forced_choice: forcedChoice
+        },
+        on_finish: function(data) {
+            const choice = parseInt(data.response) - 1;
+            if (choice === forcedChoice) {
+                const reward = allRewards[trialIndex][choice];
+                data.reward = reward;
+                data.valid_choice = true;
+            } else {
+                data.reward = null;
+                data.valid_choice = false;
+            }
+            data.context = CONTEXT_INDICES[trialIndex];
+            data.total_reward = jsPsych.data.get().select('reward').sum();
+        }
+    };
+}
 
-// Create experiment timeline
+// Feedback for forced choice
+function createForcedChoiceFeedback(trialIndex, forcedChoice) {
+    const feedback = createFeedback(trialIndex); // Reuse existing feedback structure
+    const originalStimulus = feedback.stimulus;
+    
+    feedback.stimulus = function() {
+        const lastTrial = jsPsych.data.get().last(1).values()[0];
+        if (!lastTrial.valid_choice) {
+            return `
+                <p style="color: red; font-weight: bold;">Invalid choice!</p>
+                <p>You must select ${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
+                <p>[Press any key to try again]</p>
+            `;
+        }
+        return originalStimulus.call(this);
+    };
+    
+    return feedback;
+}
+
+
+
+
+
+// Timeline
 let timeline = [enterFullscreen, welcome, instructions];
-
-for (let i = 0; i < NUM_TRIALS; i++) {
+// add forced choice trials and feedbacks
+for (let i = 0; i < NUM_FORCED_TRIALS; i++) {
+    const forcedTrialIndex = i;
+    const forcedChoice = FORCED_CHOICE_SEQUENCE[i];
+    const forcedTrial = createForcedChoiceTrial(forcedTrialIndex, forcedChoice);
+    const forcedFeedback = createForcedChoiceFeedback(forcedTrialIndex, forcedChoice);
+    
+    timeline.push({
+        timeline: [forcedTrial, forcedFeedback],
+        loop_function: function(data) {
+            return !data.values()[0].valid_choice;
+        }
+    });
+}
+//regular trials
+for (let i = NUM_FORCED_TRIALS; i < NUM_FORCED_TRIALS+NUM_TRIALS; i++) {
     timeline.push(createTrial(i));
     timeline.push(createFeedback(i));
 }
-
-// Add all probability ratings to timeline
+//rating for each arm
 probabilityRatings.forEach(rating => {
     timeline.push(rating);
 });
-
 timeline.push([debrief, exitFullscreen]);
+
+
+
+
 
 // Run experiment
 jsPsych.run(timeline);

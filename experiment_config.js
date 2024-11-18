@@ -1,6 +1,6 @@
 const experiment_setup={
       "NUM_TRIALS": 4,
-      "NUM_OPTIONS": 2,
+      "NUM_OPTIONS": 7,
       "NAME": "Celestara Universe",
       "SOCIAL_VERSION": "social",
       "REWARD_PROBABILITIES": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5,0.5,0.5],

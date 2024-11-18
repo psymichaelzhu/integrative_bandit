@@ -1,20 +1,28 @@
 const instruction_texts = {
     social: {
-        title: "In this experiment, you will choose aliens to collaborate with.",
+        title: "You are trading with aliens to obtain Aetherium (the rarest element in the Celestara universe).",
         description: [
-            "The reliability of each alien determines how likely the collaboration will succeed.",
-            "If the collaboration succeeds, you will gain 1 point. If it fails, you will gain 0 point.",
-            "Your goal is to maximize your total points."
-        ], 
-        choice_text: "You can repeatedly choose between the aliens by pressing the corresponding key:"
+            "Your goal is to maximize your total Aetherium during the limited days.",
+            "By trading with an alien, you may obtain some Aetherium.",
+            "Some aliens offer more Aetherium, while others offer less.",
+            "The planet you are on may affect the amount of Aetherium you can get from each trade."
+        ],
+        choice_text: [
+            "If you see a red instruction, please follow the instruction to make choice.",
+            "Otherwise, you can repeatedly trade with aliens by pressing the corresponding key:"
+        ]
     },
     non_social: {
-        title: "In this experiment, you will choose between boxes.",
+        title: "You are mining for Aetherium (the rarest element in the Celestara universe) between ores.",
         description: [
-            "The reward probability of each box determines how likely it is to yield a reward.",
-            "If a box is successful, you will gain 1 point. If it is unsuccessful, you will gain 0 points.",
-            "Your goal is to maximize your total points."
+            "Your goal is to maximize your total Aetherium during the limited days.",
+            "By mining one ore, you may obtain some Aetherium.",
+            "Some ores produce more Aetherium, while others produce less.",
+            "The planet you are on may affect the amount of Aetherium you can find in each kind of ore."
         ],
-        choice_text: "You can repeatedly choose between the boxes by pressing the corresponding key:"
+        choice_text: [
+            "If you see a red instruction, please follow the instruction to make choice.",
+            "Otherwise, you can repeatedly mine ores by pressing the corresponding key:"
+        ]
     }
 };

@@ -1,5 +1,5 @@
 const experiment_setup={
-    "NUM_TRIALS": 10,
+    "NUM_TRIALS": 6,
     "NUM_OPTIONS": 2,
     "NAME": "Celestara Universe",
     "SOCIAL_VERSION": "non_social",

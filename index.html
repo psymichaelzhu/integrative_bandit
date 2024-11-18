@@ -186,14 +186,14 @@ const instructions = {
             <p><b>${text.title}</b></p>
             ${text.description.map(line => `<p>${line}</p>`).join('')}
             <p>${FULL_FEEDBACK ? 
-                "You will see the outcomes of all options after each choice, whether or not you chose them." : 
-                "You can only see the outcome of your chosen option after each choice."}</p>  
+                `You will see the outcomes of all ${SOCIAL_VERSION === 'social' ? 'aliens' : 'boxes'} after each choice, whether or not you chose them.` : 
+                `You can only see the outcome of your chosen ${SOCIAL_VERSION === 'social' ? 'alien' : 'box'} after each choice.`}</p>
             <p>${text.choice_text}</p>  
             <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_OPTIONS).fill().map((_, i) => `
                 <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
                     <img src='${images[i]}' style='width: 100%;'></img>
-                    <p class='small'><strong>Press key ${i+1}</strong></p>
+                    <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 'Alien' : 'Box'} ${i+1}</strong></p>
                 </div>
                 `).join('')}
             </div>
@@ -288,8 +288,8 @@ function createFeedback(trialIndex) {
                                     <div style='${isSelected ? "border: 3px solid #333333; padding: 5px;" : ""}'>
                                         <img src='${img}' style='width: 100%; object-fit: contain;'></img>
                                         <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
-                                            `Partner ${index + 1}` : 
-                                            `Option ${index + 1}`}</strong></p>
+                                            `Alien ${index + 1}` : 
+                                            `Box ${index + 1}`}</strong></p>
                                         ${showReward ? `<p class='small' style='${isSelected ? 'font-weight: bold;' : 'color: #666; font-style: italic;'}'>
                                             ${isSelected ? `Outcome: ${reward}` : `Forgone outcome: ${reward}`}
                                         </p>` : ''}
@@ -300,7 +300,7 @@ function createFeedback(trialIndex) {
                     </div>
                     <div style='text-align: center; margin-top: 20px;'>
                         <p>${SOCIAL_VERSION === 'social' ? 
-                            `You chose Partner ${choice + 1}` :
+                            `You chose Alien ${choice + 1}` :
                             `You chose Option ${choice + 1}`}</p>
                         <p>Your gain in this round: ${lastTrial.reward}</p>
                     </div>
@@ -326,7 +326,7 @@ const probabilityRatings = images.map((image, index) => {
             <div style='margin: 2em 0;'>
                 <img src='${image}' style='width: 30%; height: 30%; object-fit: contain;'></img>
                 <p><strong>${SOCIAL_VERSION === 'social' ? 
-                    `How reliable is Partner ${index + 1}?` : 
+                    `How reliable is Alien ${index + 1}?` : 
                     `How rewarding is Box ${index + 1}?`}</strong></p>
                 <p style='font-size: 0.8em; color: #666;'>${SOCIAL_VERSION === 'social' ?
                     '(0 = Very unreliable, 100 = Very reliable)' :

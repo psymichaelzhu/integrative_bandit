@@ -2,7 +2,7 @@ const experiment_setup={
       "NUM_TRIALS": 4,
       "NUM_OPTIONS": 8,
       "NAME": "Integrative Bandit",
-      "SOCIAL_VERSION": "non_social",
+      "SOCIAL_VERSION": "social",
       "REWARD_PROBABILITIES": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5,0.5,0.5],
       "DISTRIBUTION": "bernoulli",
       "REWARD_MATRIX": [
@@ -25,8 +25,8 @@ const experiment_setup={
       [2,1], 
       [2,3],
       [3,5],
-      [4,2],
-      [4,1],
+      [3,2],
+      [2,2],
       [3,3]
   ],
   "NUM_CONTEXTS": 3,

@@ -1,12 +1,12 @@
 const instruction_texts = {
     social: {
-        title: "In this experiment, you will choose collaboration partners.",
+        title: "In this experiment, you will choose aliens to collaborate with.",
         description: [
-            "The reliability of each collaborator determines how likely the collaboration will succeed.",
+            "The reliability of each alien determines how likely the collaboration will succeed.",
             "If the collaboration succeeds, you will gain 1 point. If it fails, you will gain 0 point.",
             "Your goal is to maximize your total points."
         ], 
-        choice_text: "You can repeatedly choose between the collaborators by pressing the corresponding key:"
+        choice_text: "You can repeatedly choose between the aliens by pressing the corresponding key:"
     },
     non_social: {
         title: "In this experiment, you will choose between boxes.",

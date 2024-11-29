@@ -9,7 +9,7 @@
     <script src="js/plugin-fullscreen.js"></script>
     <script src="js/plugin-html-slider-response.js"></script>
     <script src="instructions.js"></script>
-    <script src="HT.js"></script>
+    <script src="CMAB.js"></script>
     <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
@@ -22,13 +22,14 @@ var NUM_OPTIONS = experiment_setup["NUM_OPTIONS"];
 const REWARD_PROBABILITIES = experiment_setup["REWARD_PROBABILITIES"]; //
 const NAME = experiment_setup["NAME"];
 const SOCIAL_VERSION = experiment_setup["SOCIAL_VERSION"]; 
-const allRewards = experiment_setup["REWARD_MATRIX"];
+const rawRewards = experiment_setup["REWARD_MATRIX"];
 const FULL_FEEDBACK = experiment_setup["FULL_FEEDBACK"];
 const imageIndices = experiment_setup["IMAGE_INDICES"];
 const NUM_CONTEXTS = experiment_setup["NUM_CONTEXTS"];
 const CONTEXT_INDICES = experiment_setup["CONTEXT_INDICES"];
 const NUM_FORCED_TRIALS = experiment_setup["NUM_FORCED_TRIALS"];
 const FORCED_CHOICE_SEQUENCE = experiment_setup["FORCED_CHOICE_SEQUENCE"];
+const REWARD_TYPE = experiment_setup["REWARD_TYPE"];
 
 
 
@@ -150,6 +151,32 @@ function shuffleArray(array) {
     return array;
 }
 const images = shuffleArray([...unshuffledimages]);
+
+
+// Generate the reward matrix
+function generateAllRewards(rawRewards, rewardType) {
+    return rawRewards.map(trialRewards => {
+        return trialRewards.map(probability => {
+            if (rewardType === "numeric") {
+                // Convert 0-1 to 0-100 and add Gaussian noise
+                const baseReward = probability * 100;
+                // Box-Muller transform for Gaussian noise
+                const u1 = Math.random();
+                const u2 = Math.random();
+                const std = 10;
+                const noise = std * Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+                return Math.round(Math.max(0, Math.min(100, baseReward + noise)));
+            } else if (rewardType === "binary") {
+                // Generate binary outcome based on probability with added noise
+                const noise = 0.3; // 10% noise level
+                const adjustedProb = Math.max(0, Math.min(1, probability + (Math.random() - 0.5) * noise));
+                return Math.random() < adjustedProb ? 1 : 0;
+            }
+        });
+    });
+}
+const allRewards = generateAllRewards(rawRewards, REWARD_TYPE);
+
 
 
 
@@ -391,7 +418,6 @@ function createForcedChoiceFeedback(trialIndex, forcedChoice) {
     
     return feedback;
 }
-
 
 
 

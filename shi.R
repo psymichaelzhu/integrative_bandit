@@ -32,7 +32,8 @@ ui <- fluidPage(
              column(3, textInput("state_name", "Name")),
              column(3, numericInput("state_levels", "# Levels", value = 1, min = 1)),
              column(3, selectInput("state_pattern", "Pattern", choices = c("Loop", "Random"))),
-             column(3, div(style = "margin-top: 25px;", actionButton("add_state", "Add")))
+             column(3, div(style = "margin-top: 25px;", 
+                  actionButton("add_state", "Add", class = "btn-info")))
            ),
            DTOutput("state_table")
     ),
@@ -44,7 +45,8 @@ ui <- fluidPage(
              column(3, textInput("arm_name", "Name")),
              column(3, numericInput("arm_levels", "# Levels", value = 1, min = 1)),
              column(3, selectInput("arm_pattern", "Pattern", choices = c("Loop", "Random"))),
-             column(3, div(style = "margin-top: 25px;", actionButton("add_arm", "Add")))
+             column(3, div(style = "margin-top: 25px;",
+                  actionButton("add_arm", "Add", class = "btn-info")))
            ),
            DTOutput("arm_table")
     )
@@ -53,13 +55,14 @@ ui <- fluidPage(
   # Link Matrix Configuration
   fluidRow(
     column(12,
-           h4("Link Matrix Configuration"),
+           h4("Link Function Configuration"),
            fluidRow(
-             column(3, selectInput("link_state", "State Feature", choices = NULL)),
+             column(3, selectInput("link_state", "State Variable", choices = NULL)),
              column(3, selectInput("link_function", "Link Function", 
                                  choices = c("Linear", "Random", "Correlation"))),
-             column(3, selectInput("link_arm", "Arm Feature", choices = NULL)),
-             column(3, div(style = "margin-top: 25px;", actionButton("add_link", "Add")))
+             column(3, selectInput("link_arm", "Arm Variable", choices = NULL)),
+             column(3, div(style = "margin-top: 25px;",
+                  actionButton("add_link", "Add", class = "btn-info")))
            ),
            DTOutput("link_table")
     )
@@ -116,9 +119,9 @@ server <- function(input, output, session) {
   ))
   
   link_data <- reactiveVal(data.frame(
-    State_Feature = character(),
+    State_Variable = character(),
     Link_Function = character(),
-    Arm_Feature = character(),
+    Arm_Variable = character(),
     stringsAsFactors = FALSE
   ))
   
@@ -205,16 +208,16 @@ server <- function(input, output, session) {
   # Add Link with improved duplicate check
   observeEvent(input$add_link, {
     new_link <- data.frame(
-      State_Feature = input$link_state,
+      State_Variable = input$link_state,
       Link_Function = input$link_function,
-      Arm_Feature = input$link_arm,
+      Arm_Variable = input$link_arm,
       stringsAsFactors = FALSE
     )
     
     # Check for duplicate
     current_data <- link_data()
-    duplicate_idx <- which(current_data$State_Feature == input$link_state & 
-                          current_data$Arm_Feature == input$link_arm)
+    duplicate_idx <- which(current_data$State_Variable == input$link_state & 
+                          current_data$Arm_Variable == input$link_arm)
     
     if (length(duplicate_idx) > 0) {
       # Replace existing row
@@ -236,9 +239,9 @@ server <- function(input, output, session) {
     if (nrow(df) == 0) {
       # 创建一个空数据框，但包含所有必要的列
       df <- data.frame(
-        State_Feature = character(),
+        State_Variable = character(),
         Link_Function = character(),
-        Arm_Feature = character(),
+        Arm_Variable = character(),
         Operation = character(),
         stringsAsFactors = FALSE
       )
@@ -246,7 +249,7 @@ server <- function(input, output, session) {
       # 为现有数据添加 Operation 列
       df$Operation <- sapply(1:nrow(df), function(i) {
         sprintf('<button onclick="Shiny.setInputValue(\'remove_link_key\', \'%s|%s\')" class="btn btn-danger btn-sm">Remove</button>', 
-                df$State_Feature[i], df$Arm_Feature[i])
+                df$State_Variable[i], df$Arm_Variable[i])
       })
     }
     
@@ -260,7 +263,11 @@ server <- function(input, output, session) {
         paging = FALSE,
         columnDefs = list(
           list(
-            targets = ncol(df) - 1,  # Operation column
+            targets = "_all",
+            className = 'dt-left'
+          ),
+          list(
+            targets = ncol(df) - 1,
             className = 'dt-center'
           )
         )
@@ -268,7 +275,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # Remove link by composite key (State_Feature|Arm_Feature)
+  # Remove link by composite key (State_Variable|Arm_Variable)
   observeEvent(input$remove_link_key, {
     if (!is.null(input$remove_link_key)) {
       # Split the composite key
@@ -278,8 +285,8 @@ server <- function(input, output, session) {
       
       # Remove the link
       current_links <- link_data()
-      links_to_keep <- !(current_links$State_Feature == state_feature & 
-                        current_links$Arm_Feature == arm_feature)
+      links_to_keep <- !(current_links$State_Variable == state_feature & 
+                        current_links$Arm_Variable == arm_feature)
       
       # Update with remaining links
       link_data(current_links[links_to_keep, , drop = FALSE])
@@ -292,7 +299,7 @@ server <- function(input, output, session) {
     if (!is.null(name_to_remove) && !(name_to_remove %in% c("Game", "Time"))) {  # Protect default rows
       # First remove any links that reference this state
       current_links <- link_data()
-      links_to_keep <- current_links$State_Feature != name_to_remove
+      links_to_keep <- current_links$State_Variable != name_to_remove
       link_data(current_links[links_to_keep, , drop = FALSE])
       
       # Then remove the state
@@ -311,7 +318,7 @@ server <- function(input, output, session) {
     if (!is.null(name_to_remove) && name_to_remove != "Position") {  # Protect default row
       # First remove any links that reference this arm
       current_links <- link_data()
-      links_to_keep <- current_links$Arm_Feature != name_to_remove
+      links_to_keep <- current_links$Arm_Variable != name_to_remove
       link_data(current_links[links_to_keep, , drop = FALSE])
       
       # Then remove the arm
@@ -341,10 +348,14 @@ server <- function(input, output, session) {
       options = list(
         dom = 't',
         paging = FALSE,
-        stripeClasses = FALSE,  # Disable striping
+        stripeClasses = FALSE,
         columnDefs = list(
           list(
-            targets = ncol(df) - 1,  # Operation column
+            targets = "_all",
+            className = 'dt-left'
+          ),
+          list(
+            targets = ncol(df) - 1,
             className = 'dt-center'
           )
         ),
@@ -373,10 +384,14 @@ server <- function(input, output, session) {
       options = list(
         dom = 't',
         paging = FALSE,
-        stripeClasses = FALSE,  # Disable striping
+        stripeClasses = FALSE,
         columnDefs = list(
           list(
-            targets = ncol(df) - 1,  # Operation column
+            targets = "_all",
+            className = 'dt-left'
+          ),
+          list(
+            targets = ncol(df) - 1,
             className = 'dt-center'
           )
         ),

@@ -70,14 +70,10 @@ ui <- fluidPage(
 
 # Server
 server <- function(input, output, session) {
-  # Add pattern choices constant
-  pattern_choices <- c("Loop", "Random")
-  link_function_choices <- c("Linear", "Random", "Inverse")  # Expandable link functions
-  
   # Reactive: Initialize State and Arm Features
   state_data <- reactiveVal(data.frame(
     Name = c("Game", "Time"),
-    Levels = c(1, isolate(input$num_trials)),  # Use isolate to avoid direct reactive access
+    Levels = c(isolate(input$num_trials)),  # Use isolate to avoid direct reactive access
     Pattern = c("Loop", "Loop"),
     stringsAsFactors = FALSE
   ))
@@ -89,103 +85,136 @@ server <- function(input, output, session) {
     stringsAsFactors = FALSE
   ))
   
+  # State Features Table
+  observeEvent(input$add_state, {
+    current_data <- state_data()
+    new_row <- data.frame(Name = "", Levels = "", Pattern = "Loop")
+    updated_data <- rbind(current_data, new_row)
+    state_data(updated_data)
+  })
+  
+  observeEvent(input$remove_state, {
+    current_data <- state_data()
+    if (nrow(current_data) > 2) {
+      updated_data <- current_data[-nrow(current_data), ]
+      state_data(updated_data)
+    }
+  })
+  
+  output$state_table <- renderDT({
+    datatable(
+      state_data(),
+      editable = TRUE,
+      rownames = FALSE,
+      options = list(dom = 't', paging = FALSE)
+    )
+  }, server = FALSE)
+  
+  proxy_state <- dataTableProxy("state_table")
+  observeEvent(input$state_table_cell_edit, {
+    info <- input$state_table_cell_edit
+    current_data <- state_data()
+    current_data[info$row, info$col + 1] <- info$value  # Adjust column index for editing
+    state_data(current_data)
+  })
+  
+  # Arm Features Table
+  observeEvent(input$add_arm, {
+    current_data <- arm_data()
+    new_row <- data.frame(Name = "", Levels = "", Pattern = "Loop")
+    updated_data <- rbind(current_data, new_row)
+    arm_data(updated_data)
+  })
+  
+  observeEvent(input$remove_arm, {
+    current_data <- arm_data()
+    if (nrow(current_data) > 1) {
+      updated_data <- current_data[-nrow(current_data), ]
+      arm_data(updated_data)
+    }
+  })
+  
+  output$arm_table <- renderDT({
+    datatable(
+      arm_data(),
+      editable = TRUE,
+      rownames = FALSE,
+      options = list(dom = 't', paging = FALSE)
+    )
+  }, server = FALSE)
+  
+  proxy_arm <- dataTableProxy("arm_table")
+  observeEvent(input$arm_table_cell_edit, {
+    info <- input$arm_table_cell_edit
+    current_data <- arm_data()
+    current_data[info$row, info$col + 1] <- info$value  # Adjust column index for editing
+    arm_data(current_data)
+  })
+  
+  # Link Matrix Table
   link_data <- reactiveVal(data.frame(
-    State_Feature = c("Time"),
-    Link_Function = c("Linear"),
-    Arm_Feature = c("Position"),
+    State_Feature = character(),
+    Link_Function = character(),
+    Arm_Feature = character(),
     stringsAsFactors = FALSE
   ))
   
-  # Observe changes to NUM_TRIALS and NUM_ARMS, and update State/Arm data
-  observeEvent(input$num_trials, {
-    state_data(data.frame(
-      Name = c("Game", "Time"),
-      Levels = c(1, input$num_trials),
-      Pattern = c("Loop", "Loop"),
-      stringsAsFactors = FALSE
-    ))
+  observeEvent(input$add_link, {
+    current_data <- link_data()
+    new_row <- data.frame(State_Feature = "", Link_Function = "", Arm_Feature = "")
+    updated_data <- rbind(current_data, new_row)
+    link_data(updated_data)
   })
   
-  observeEvent(input$num_arms, {
-    arm_data(data.frame(
-      Name = c("Position"),
-      Levels = c(input$num_arms),
-      Pattern = c("Loop"),
-      stringsAsFactors = FALSE
-    ))
-  })
-  
-  # Generate State and Arm Matrices
-  state_matrices <- reactive({
-    lapply(1:nrow(state_data()), function(i) {
-      generate_matrix(as.numeric(state_data()$Levels[i]), input$num_trials, state_data()$Pattern[i])
-    })
-  })
-  
-  arm_matrices <- reactive({
-    lapply(1:nrow(arm_data()), function(i) {
-      generate_matrix(as.numeric(arm_data()$Levels[i]), input$num_arms, arm_data()$Pattern[i])
-    })
-  })
-  
-  # Generate Reward Matrix based on Link Matrix
-  reward_matrix <- eventReactive(input$submit, {
-    links <- link_data()
-    final_matrix <- matrix(0, nrow = input$num_trials, ncol = input$num_arms)
-    
-    for (i in 1:nrow(links)) {
-      state_idx <- which(state_data()$Name == links$State_Feature[i])
-      arm_idx <- which(arm_data()$Name == links$Arm_Feature[i])
-      
-      if (length(state_idx) == 0 || length(arm_idx) == 0) next
-      
-      state_matrix <- state_matrices()[[state_idx]]
-      arm_matrix <- arm_matrices()[[arm_idx]]
-      
-      # Apply link function
-      if (links$Link_Function[i] == "Linear") {
-        link_matrix <- outer(seq(1, 0, length.out = input$num_trials), seq(0, 1, length.out = input$num_arms))
-      } else if (links$Link_Function[i] == "Random") {
-        link_matrix <- matrix(runif(input$num_trials * input$num_arms), nrow = input$num_trials, ncol = input$num_arms)
-      } else if (links$Link_Function[i] == "Inverse") {
-        link_matrix <- outer(1 / (1:input$num_trials), 1 / (1:input$num_arms))
-      } else {
-        link_matrix <- matrix(0, nrow = input$num_trials, ncol = input$num_arms)
-      }
-      
-      # Calculate partial reward matrix
-      partial_matrix <- state_matrix %*% link_matrix %*% t(arm_matrix)
-      final_matrix <- final_matrix + partial_matrix
+  observeEvent(input$remove_link, {
+    current_data <- link_data()
+    if (nrow(current_data) > 0) {
+      updated_data <- current_data[-nrow(current_data), ]
+      link_data(updated_data)
     }
-    
-    # Normalize to 0-100 range
-    if (max(final_matrix) > 0) {
-      final_matrix <- 100 * (final_matrix - min(final_matrix)) / (max(final_matrix) - min(final_matrix))
-    }
-    return(final_matrix)
   })
   
-  # Render Reward Matrix Heatmap
+  output$link_table <- renderDT({
+    datatable(
+      link_data(),
+      editable = TRUE,
+      rownames = FALSE,
+      options = list(dom = 't', paging = FALSE)
+    )
+  }, server = FALSE)
+  
+  # Reward Matrix Heatmap
+  reward_matrix <- reactive({
+    matrix(runif(input$num_trials * input$num_arms, 0, 100), nrow = input$num_trials, ncol = input$num_arms)
+  })
+  
   output$reward_matrix <- renderPlot({
     mat <- reward_matrix()
-    if (is.null(mat)) return()
     heatmap_data <- melt(mat)
     colnames(heatmap_data) <- c("Trial", "Arm", "Value")
     ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
       geom_tile() +
-      scale_fill_viridis_c() +
-      scale_x_continuous(breaks = if (input$num_trials > 20) seq(1, input$num_trials, length.out = 20) else 1:input$num_trials,
-                         labels = if (input$num_trials > 20) round(seq(1, input$num_trials, length.out = 20)) else 1:input$num_trials) +
-      scale_y_continuous(breaks = 1:input$num_arms, labels = 1:input$num_arms) +
+      scale_fill_gradient(low = "yellow", high = "red") +
       theme_minimal() +
-      labs(x = "Trial", y = "Arm", fill = "Reward") +
-      theme_bruce()
+      labs(x = "Trial", y = "Arm", fill = "Reward")
   })
   
-  # Render Tables
-  output$state_table <- renderDT({datatable(state_data(), editable = TRUE, options = list(dom = 't', paging = FALSE))})
-  output$arm_table <- renderDT({datatable(arm_data(), editable = TRUE, options = list(dom = 't', paging = FALSE))})
-  output$link_table <- renderDT({datatable(link_data(), editable = TRUE, options = list(dom = 't', paging = FALSE))})
+  # Save Configuration
+  output$save <- downloadHandler(
+    filename = function() {
+      paste("configuration", Sys.Date(), ".csv", sep = "_")
+    },
+    content = function(file) {
+      write.csv(
+        list(
+          State_Features = state_data(),
+          Arm_Features = arm_data(),
+          Link_Matrix = link_data()
+        ),
+        file
+      )
+    }
+  )
 }
 
 # Run App

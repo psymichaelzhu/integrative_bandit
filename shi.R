@@ -6,12 +6,13 @@ library(bruceR)
 
 # UI
 ui <- fluidPage(
-  titlePanel("Experimental Parameterization Framework"),
+  titlePanel("Integrative Bandit Parameterization Interface"),
   
-  # Initialization of NUM_TRIALS and NUM_ARMS
+  # Initialization of NUM_TRIALS, NUM_ARMS, and SEED
   fluidRow(
-    column(6, numericInput("num_trials", "Number of Trials (NUM_TRIALS):", value = 10, min = 1)),
-    column(6, numericInput("num_arms", "Number of Arms (NUM_ARMS):", value = 5, min = 1))
+    column(4, numericInput("num_trials", "Number of Trials", value = 10, min = 1)),
+    column(4, numericInput("num_arms", "Number of Arms", value = 5, min = 1)),
+    column(4, numericInput("seed", "Random Seed", value = 42, min = 1))
   ),
   
   # Top: Reward Matrix Visualization
@@ -22,11 +23,11 @@ ui <- fluidPage(
     )
   ),
   
-  # State and Arm Features Configuration (side by side)
+  # State and Arm Variables Configuration (side by side)
   fluidRow(
-    # State Features Configuration
+    # State Variables Configuration
     column(6,
-           h4("State Features Configuration"),
+           h4("State Variables Configuration"),
            fluidRow(
              column(3, textInput("state_name", "Name")),
              column(3, numericInput("state_levels", "# Levels", value = 1, min = 1)),
@@ -36,9 +37,9 @@ ui <- fluidPage(
            DTOutput("state_table")
     ),
     
-    # Arm Features Configuration
+    # Arm Variables Configuration
     column(6,
-           h4("Arm Features Configuration"),
+           h4("Arm Variables Configuration"),
            fluidRow(
              column(3, textInput("arm_name", "Name")),
              column(3, numericInput("arm_levels", "# Levels", value = 1, min = 1)),
@@ -54,33 +55,49 @@ ui <- fluidPage(
     column(12,
            h4("Link Matrix Configuration"),
            fluidRow(
-             column(4, selectInput("link_state", "State Feature:", choices = NULL)),
-             column(4, textInput("link_function", "Link Function:")),
-             column(4, selectInput("link_arm", "Arm Feature:", choices = NULL))
+             column(3, selectInput("link_state", "State Feature", choices = NULL)),
+             column(3, selectInput("link_function", "Link Function", 
+                                 choices = c("linear", "random", "correlation"))),
+             column(3, selectInput("link_arm", "Arm Feature", choices = NULL)),
+             column(3, div(style = "margin-top: 25px;", actionButton("add_link", "Add")))
            ),
-           actionButton("add_link", "Add Link"),
-           DTOutput("link_table"),
-           actionButton("remove_link", "Remove Selected Link"),
-           tags$hr(),
-           actionButton("submit", "Submit"),
-           downloadButton("save", "Save Configuration")
+           DTOutput("link_table")
     )
   )
 )
 
 # Server
 server <- function(input, output, session) {
+  # Update default rows when num_trials or num_arms changes
+  observeEvent(input$num_trials, {
+    current_data <- state_data()
+    time_row <- which(current_data$Name == "Time")
+    if (length(time_row) > 0) {
+      current_data$Levels[time_row] <- input$num_trials
+      state_data(current_data)
+    }
+  })
+
+  observeEvent(input$num_arms, {
+    current_data <- arm_data()
+    position_row <- which(current_data$Name == "Position")
+    if (length(position_row) > 0) {
+      current_data$Levels[position_row] <- input$num_arms
+      arm_data(current_data)
+    }
+  })
+
   # Initialize State and Arm Data with Default Rows
   state_data <- reactiveVal(data.frame(
     Name = c("Game", "Time"),
-    Levels = c(1, 10),
+    Levels = c(1, 10),  # Time will be updated by num_trials
     Pattern = c("Loop", "Loop"),
     stringsAsFactors = FALSE
   ))
   
   arm_data <- reactiveVal(data.frame(
     Name = c("Position"),
-    Levels = c(5),
+    Levels = c(5),  # Position will be updated by num_arms
     Pattern = c("Loop"),
     stringsAsFactors = FALSE
   ))
@@ -92,7 +109,39 @@ server <- function(input, output, session) {
     stringsAsFactors = FALSE
   ))
   
-  # Add State Feature
+  # Initialize choices for link dropdowns
+  observe({
+    updateSelectInput(session, "link_state", 
+                     choices = state_data()$Name,
+                     selected = state_data()$Name[1])
+    updateSelectInput(session, "link_arm", 
+                     choices = arm_data()$Name,
+                     selected = arm_data()$Name[1])
+  }, priority = 1000)  # High priority to ensure it runs early
+  
+  # Initialize the default values to match input values
+  observe({
+    # Update initial values when the app starts
+    isolate({
+      # Update Time levels
+      current_state_data <- state_data()
+      time_row <- which(current_state_data$Name == "Time")
+      if (length(time_row) > 0) {
+        current_state_data$Levels[time_row] <- input$num_trials
+        state_data(current_state_data)
+      }
+      
+      # Update Position levels
+      current_arm_data <- arm_data()
+      position_row <- which(current_arm_data$Name == "Position")
+      if (length(position_row) > 0) {
+        current_arm_data$Levels[position_row] <- input$num_arms
+        arm_data(current_arm_data)
+      }
+    })
+  }, priority = 1000)  # High priority to ensure it runs at startup
+  
+  # Add State Variable with duplicate check
   observeEvent(input$add_state, {
     new_state <- data.frame(
       Name = input$state_name,
@@ -100,11 +149,23 @@ server <- function(input, output, session) {
       Pattern = input$state_pattern,
       stringsAsFactors = FALSE
     )
-    state_data(rbind(state_data(), new_state))
+    
+    # Check for duplicate
+    current_data <- state_data()
+    duplicate_idx <- which(current_data$Name == input$state_name)
+    
+    if (length(duplicate_idx) > 0) {
+      # Replace existing row
+      current_data[duplicate_idx, ] <- new_state
+      state_data(current_data)
+    } else {
+      # Add new row
+      state_data(rbind(current_data, new_state))
+    }
     updateSelectInput(session, "link_state", choices = state_data()$Name)
   })
   
-  # Add Arm Feature
+  # Add Arm Variable with duplicate check
   observeEvent(input$add_arm, {
     new_arm <- data.frame(
       Name = input$arm_name,
@@ -112,11 +173,23 @@ server <- function(input, output, session) {
       Pattern = input$arm_pattern,
       stringsAsFactors = FALSE
     )
-    arm_data(rbind(arm_data(), new_arm))
+    
+    # Check for duplicate
+    current_data <- arm_data()
+    duplicate_idx <- which(current_data$Name == input$arm_name)
+    
+    if (length(duplicate_idx) > 0) {
+      # Replace existing row
+      current_data[duplicate_idx, ] <- new_arm
+      arm_data(current_data)
+    } else {
+      # Add new row
+      arm_data(rbind(current_data, new_arm))
+    }
     updateSelectInput(session, "link_arm", choices = arm_data()$Name)
   })
   
-  # Add Link
+  # Add Link with improved duplicate check
   observeEvent(input$add_link, {
     new_link <- data.frame(
       State_Feature = input$link_state,
@@ -124,68 +197,128 @@ server <- function(input, output, session) {
       Arm_Feature = input$link_arm,
       stringsAsFactors = FALSE
     )
-    link_data(rbind(link_data(), new_link))
+    
+    # Check for duplicate
+    current_data <- link_data()
+    duplicate_idx <- which(current_data$State_Feature == input$link_state & 
+                          current_data$Arm_Feature == input$link_arm)
+    
+    if (length(duplicate_idx) > 0) {
+      # Replace existing row
+      current_data[duplicate_idx, ] <- new_link
+      link_data(current_data)
+    } else {
+      # Add new row
+      if (nrow(current_data) == 0) {
+        link_data(new_link)
+      } else {
+        link_data(rbind(current_data, new_link))
+      }
+    }
   })
   
-  # Remove Selected State
-  observeEvent(input$remove_state_row, {
-    row_to_remove <- input$remove_state_row
-    if (!is.null(row_to_remove) && row_to_remove > 2) {  # Protect default rows
-      # Get the state name that's being removed
-      removed_state <- state_data()[row_to_remove, "Name"]
+  # Link table rendering with improved remove button
+  output$link_table <- renderDT({
+    df <- link_data()
+    if (nrow(df) == 0) {
+      # 创建一个空数据框，但包含所有必要的列
+      df <- data.frame(
+        State_Feature = character(),
+        Link_Function = character(),
+        Arm_Feature = character(),
+        Operation = character(),
+        stringsAsFactors = FALSE
+      )
+    } else {
+      # 为现有数据添加 Operation 列
+      df$Operation <- sapply(1:nrow(df), function(i) {
+        sprintf('<button onclick="Shiny.setInputValue(\'remove_link_key\', \'%s|%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+                df$State_Feature[i], df$Arm_Feature[i])
+      })
+    }
+    
+    datatable(
+      df,
+      escape = FALSE,
+      selection = "none",
+      rownames = FALSE,
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        columnDefs = list(
+          list(
+            targets = ncol(df) - 1,  # Operation column
+            className = 'dt-center'
+          )
+        )
+      )
+    )
+  })
+  
+  # Remove link by composite key (State_Feature|Arm_Feature)
+  observeEvent(input$remove_link_key, {
+    if (!is.null(input$remove_link_key)) {
+      # Split the composite key
+      key_parts <- strsplit(input$remove_link_key, "\\|")[[1]]
+      state_feature <- key_parts[1]
+      arm_feature <- key_parts[2]
       
-      # Remove the state
-      current_data <- state_data()
-      current_data <- current_data[-row_to_remove, ]
-      state_data(current_data)
-      
-      # Remove any links that reference this state
+      # Remove the link
       current_links <- link_data()
-      links_to_keep <- current_links$State_Feature != removed_state
-      link_data(current_links[links_to_keep, ])
+      links_to_keep <- !(current_links$State_Feature == state_feature & 
+                        current_links$Arm_Feature == arm_feature)
+      
+      # Update with remaining links
+      link_data(current_links[links_to_keep, , drop = FALSE])
+    }
+  })
+  
+  # Remove State by Name with link cleanup
+  observeEvent(input$remove_state_name, {
+    name_to_remove <- input$remove_state_name
+    if (!is.null(name_to_remove) && !(name_to_remove %in% c("Game", "Time"))) {  # Protect default rows
+      # First remove any links that reference this state
+      current_links <- link_data()
+      links_to_keep <- current_links$State_Feature != name_to_remove
+      link_data(current_links[links_to_keep, , drop = FALSE])
+      
+      # Then remove the state
+      current_data <- state_data()
+      current_data <- current_data[current_data$Name != name_to_remove, ]
+      state_data(current_data)
       
       # Update the state feature dropdown
       updateSelectInput(session, "link_state", choices = state_data()$Name)
     }
   })
   
-  # Remove Selected Arm
-  observeEvent(input$remove_arm_row, {
-    row_to_remove <- input$remove_arm_row
-    if (!is.null(row_to_remove) && row_to_remove > 1) {  # Protect default row
-      # Get the arm name that's being removed
-      removed_arm <- arm_data()[row_to_remove, "Name"]
-      
-      # Remove the arm
-      current_data <- arm_data()
-      current_data <- current_data[-row_to_remove, ]
-      arm_data(current_data)
-      
-      # Remove any links that reference this arm
+  # Remove Arm by Name with link cleanup
+  observeEvent(input$remove_arm_name, {
+    name_to_remove <- input$remove_arm_name
+    if (!is.null(name_to_remove) && name_to_remove != "Position") {  # Protect default row
+      # First remove any links that reference this arm
       current_links <- link_data()
-      links_to_keep <- current_links$Arm_Feature != removed_arm
-      link_data(current_links[links_to_keep, ])
+      links_to_keep <- current_links$Arm_Feature != name_to_remove
+      link_data(current_links[links_to_keep, , drop = FALSE])
+      
+      # Then remove the arm
+      current_data <- arm_data()
+      current_data <- current_data[current_data$Name != name_to_remove, ]
+      arm_data(current_data)
       
       # Update the arm feature dropdown
       updateSelectInput(session, "link_arm", choices = arm_data()$Name)
     }
   })
   
-  # Remove Selected Link
-  observeEvent(input$remove_link, {
-    selected <- input$link_table_rows_selected
-    if (length(selected) > 0) {
-      link_data(link_data()[-selected, ])
-    }
-  })
-  
-  # Render Tables
+  # Render Tables with correct remove button functionality
   output$state_table <- renderDT({
     df <- state_data()
-    # Add action column (empty for default rows)
-    df$Action <- sapply(1:nrow(df), function(i) {
+    # Add operation column (empty for default rows)
+    df$Operation <- sapply(1:nrow(df), function(i) {
       if (i <= 2) return("") # Default rows (Game and Time)
-      sprintf('<button onclick="Shiny.setInputValue(\'remove_state_row\', %d)" class="btn btn-danger btn-sm">Remove</button>', i)
+      sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+              df$Name[i])
     })
     
     datatable(
@@ -198,20 +331,26 @@ server <- function(input, output, session) {
         paging = FALSE,
         columnDefs = list(
           list(
-            targets = ncol(df) - 1,  # Action column
+            targets = ncol(df) - 1,  # Operation column
             className = 'dt-center'
           )
-        )
+        ),
+        initComplete = JS(
+          "function(settings, json) {",
+          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",
+          "  $(this.api().rows([0,1]).nodes()).css({'background-color': '#f5f5f5'});",
+          "}")
       )
     )
   })
   
   output$arm_table <- renderDT({
     df <- arm_data()
-    # Add action column (empty for default row)
-    df$Action <- sapply(1:nrow(df), function(i) {
+    # Add operation column (empty for default row)
+    df$Operation <- sapply(1:nrow(df), function(i) {
       if (i <= 1) return("") # Default row (Position)
-      sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_row\', %d)" class="btn btn-danger btn-sm">Remove</button>', i)
+      sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+              df$Name[i])
     })
     
     datatable(
@@ -224,21 +363,25 @@ server <- function(input, output, session) {
         paging = FALSE,
         columnDefs = list(
           list(
-            targets = ncol(df) - 1,  # Action column
+            targets = ncol(df) - 1,  # Operation column
             className = 'dt-center'
           )
-        )
+        ),
+        initComplete = JS(
+          "function(settings, json) {",
+          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",
+          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",
+          "}")
       )
     )
   })
   
-  output$link_table <- renderDT({
-    datatable(link_data(), selection = "single", rownames = FALSE, options = list(dom = 't', paging = FALSE))
-  })
-  
-  # Reward Matrix Heatmap
+  # Reward Matrix Heatmap with seed control
   reward_matrix <- reactive({
-    matrix(runif(input$num_trials * input$num_arms, 0, 100), nrow = input$num_trials, ncol = input$num_arms)
+    set.seed(input$seed)  # Set random seed
+    matrix(runif(input$num_trials * input$num_arms, 0, 100), 
+           nrow = input$num_trials, 
+           ncol = input$num_arms)
   })
   
   output$reward_matrix <- renderPlot({
@@ -261,8 +404,8 @@ server <- function(input, output, session) {
     content = function(file) {
       write.csv(
         list(
-          State_Features = state_data(),
-          Arm_Features = arm_data(),
+          State_Variables = state_data(),
+          Arm_Variables = arm_data(),
           Link_Matrix = link_data()
         ),
         file

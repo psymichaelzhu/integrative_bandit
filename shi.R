@@ -18,7 +18,7 @@ ui <- fluidPage(
   # Top: Reward Matrix Visualization
   fluidRow(
     column(12, 
-           h3("Reward Matrix Heatmap"),
+           h3("Demo Reward Matrix Heatmap"),
            plotOutput("reward_matrix", height = "300px")
     )
   ),
@@ -57,11 +57,24 @@ ui <- fluidPage(
            fluidRow(
              column(3, selectInput("link_state", "State Feature", choices = NULL)),
              column(3, selectInput("link_function", "Link Function", 
-                                 choices = c("linear", "random", "correlation"))),
+                                 choices = c("Linear", "Random", "Correlation"))),
              column(3, selectInput("link_arm", "Arm Feature", choices = NULL)),
              column(3, div(style = "margin-top: 25px;", actionButton("add_link", "Add")))
            ),
            DTOutput("link_table")
+    )
+  ),
+  
+  # Bottom buttons
+  fluidRow(
+    column(12,
+           div(style = "margin-top: 20px; text-align: center;",
+               actionButton("update_demo", "Update Demo", 
+                          class = "btn-primary",
+                          style = "margin-right: 10px"),
+               downloadButton("save_config", "Save Configuration",
+                            class = "btn-success")
+           )
     )
   )
 )
@@ -314,7 +327,6 @@ server <- function(input, output, session) {
   # Render Tables with correct remove button functionality
   output$state_table <- renderDT({
     df <- state_data()
-    # Add operation column (empty for default rows)
     df$Operation <- sapply(1:nrow(df), function(i) {
       if (i <= 2) return("") # Default rows (Game and Time)
       sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
@@ -329,6 +341,7 @@ server <- function(input, output, session) {
       options = list(
         dom = 't',
         paging = FALSE,
+        stripeClasses = FALSE,  # Disable striping
         columnDefs = list(
           list(
             targets = ncol(df) - 1,  # Operation column
@@ -337,8 +350,8 @@ server <- function(input, output, session) {
         ),
         initComplete = JS(
           "function(settings, json) {",
-          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",
-          "  $(this.api().rows([0,1]).nodes()).css({'background-color': '#f5f5f5'});",
+          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",  # Set all rows to white first
+          "  $(this.api().rows([0,1]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default rows to gray
           "}")
       )
     )
@@ -346,7 +359,6 @@ server <- function(input, output, session) {
   
   output$arm_table <- renderDT({
     df <- arm_data()
-    # Add operation column (empty for default row)
     df$Operation <- sapply(1:nrow(df), function(i) {
       if (i <= 1) return("") # Default row (Position)
       sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
@@ -361,6 +373,7 @@ server <- function(input, output, session) {
       options = list(
         dom = 't',
         paging = FALSE,
+        stripeClasses = FALSE,  # Disable striping
         columnDefs = list(
           list(
             targets = ncol(df) - 1,  # Operation column
@@ -369,8 +382,8 @@ server <- function(input, output, session) {
         ),
         initComplete = JS(
           "function(settings, json) {",
-          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",
-          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",
+          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",  # Set all rows to white first
+          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default row to gray
           "}")
       )
     )
@@ -396,20 +409,32 @@ server <- function(input, output, session) {
       theme_bruce()
   })
   
+  # Update Demo (renamed from Generate Demo)
+  observeEvent(input$update_demo, {
+    # Add your demo update logic here
+    # This is a placeholder for the demo update functionality
+  })
+  
   # Save Configuration
-  output$save <- downloadHandler(
+  output$save_config <- downloadHandler(
     filename = function() {
-      paste("configuration", Sys.Date(), ".csv", sep = "_")
+      paste("bandit_configuration_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv", sep = "")
     },
     content = function(file) {
-      write.csv(
-        list(
-          State_Variables = state_data(),
-          Arm_Variables = arm_data(),
-          Link_Matrix = link_data()
-        ),
-        file
+      # Prepare configuration data
+      config <- list(
+        state_variables = state_data(),
+        arm_variables = arm_data(),
+        link_matrix = link_data(),
+        parameters = list(
+          num_trials = input$num_trials,
+          num_arms = input$num_arms,
+          seed = input$seed
+        )
       )
+      
+      # Save to file
+      saveRDS(config, file)
     }
   )
 }

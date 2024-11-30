@@ -29,7 +29,7 @@ ui <- fluidPage(
            h4("State Features Configuration"),
            fluidRow(
              column(3, textInput("state_name", "Name")),
-             column(3, numericInput("state_levels", "Levels", value = 1, min = 1)),
+             column(3, numericInput("state_levels", "# Levels", value = 1, min = 1)),
              column(3, selectInput("state_pattern", "Pattern", choices = c("Loop", "Random"))),
              column(3, div(style = "margin-top: 25px;", actionButton("add_state", "Add")))
            ),
@@ -42,7 +42,7 @@ ui <- fluidPage(
            h4("Arm Features Configuration"),
            fluidRow(
              column(3, textInput("arm_name", "Name")),
-             column(3, numericInput("arm_levels", "Levels", value = 1, min = 1)),
+             column(3, numericInput("arm_levels", "# Levels", value = 1, min = 1)),
              column(3, selectInput("arm_pattern", "Pattern", choices = c("Loop", "Random"))),
              column(3, div(style = "margin-top: 25px;", actionButton("add_arm", "Add")))
            ),

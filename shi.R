@@ -61,29 +61,31 @@ ui <- fluidPage(
            fluidRow(
              column(3, 
                     selectInput("link_state", "State Variable", choices = NULL),
-                    style = "padding-right: 5px; width: 20%;"),
+                    style = "padding-right: 5px; width: 21%;"),
              column(3, 
                     selectInput("link_state_function", "State Distribution", 
                               choices = c("Linear", "Asymmetric", "Correlation")),
-                    style = "padding-right: 0; width: 20%;"),
+                    style = "padding-right: 5px; width: 21%;"),
              column(1,
-                    div(style = "margin-top: 25px; width: 8%; padding: 0;",
+                    div(style = "margin-top: 25px; width: 100%; text-align: center;",
                         actionButton("link_distributions", "",
                                    icon = icon("link"),
                                    class = "btn-sm",
-                                   style = "padding: 2px 4px; font-size: 12px;"))),
+                                   style = "padding: 6px 8px;")),
+                    style = "width: 8%;"),
              column(3, 
                     selectInput("link_arm_function", "Arm Distribution", 
                               choices = c("Linear", "Asymmetric", "Correlation")),
-                    style = "padding-left: 0; width: 20%;"),
+                    style = "padding-left: 5px; width: 21%;"),
              column(2, 
                     selectInput("link_arm", "Arm Variable", choices = NULL),
-                    style = "padding-right: 5px; width: 20%;"),
+                    style = "padding-left: 5px; width: 21%;"),
              column(1, 
-                    div(style = "margin-top: 25px; width: 12%;", 
+                    div(style = "margin-top: 25px;", 
                         actionButton("add_link", "Add", 
                                    class = "btn-info btn-sm",
-                                   style = "width: 100%;")))
+                                   style = "width: 50px;")),
+                    style = "width: 8%;")
            ),
            div(style = "padding: 0 15px;",
                DTOutput("link_table"))
@@ -293,6 +295,7 @@ server <- function(input, output, session) {
         dom = 't',
         paging = FALSE,
         scrollX = FALSE,
+        stripeClasses = FALSE,  # 禁用条纹样式
         columnDefs = list(
           list(
             targets = "_all",
@@ -317,7 +320,10 @@ server <- function(input, output, session) {
         )
       )
     ) %>% 
-      formatStyle(columns = 1:6)
+      formatStyle(
+        columns = 1:6,
+        backgroundColor = 'white'  # 设置所有单元格背景为白色
+      )
   })
   
   # Remove link by composite key (State_Variable|Arm_Variable)

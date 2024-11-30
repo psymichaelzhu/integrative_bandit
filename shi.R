@@ -474,8 +474,8 @@ server <- function(input, output, session) {
   
   # Reward Matrix Heatmap with seed control
   reward_matrix <- reactive({
-    set.seed(input$seed)  # Set random seed
-    matrix(runif(input$num_trials * input$num_arms, 0, 100), 
+    # Instead of random values, create a matrix of zeros
+    matrix(0, 
            nrow = input$num_trials, 
            ncol = input$num_arms)
   })
@@ -490,7 +490,7 @@ server <- function(input, output, session) {
     
     ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
       geom_tile() +
-      scale_fill_viridis_c() +
+      scale_fill_viridis_c(limits = c(0, 100)) +  # Set fixed scale limits
       theme_minimal() +
       labs(x = "Trial", y = "Arm", fill = "Reward") +
       theme_bruce()

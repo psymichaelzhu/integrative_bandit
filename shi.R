@@ -61,26 +61,26 @@ ui <- fluidPage(
            fluidRow(
              column(3, 
                     selectInput("link_state", "State Variable", choices = NULL),
-                    style = "padding-right: 5px; width: 19%;"),
+                    style = "padding-right: 5px; width: 20%;"),
              column(3, 
                     selectInput("link_state_function", "State Distribution", 
                               choices = c("Linear", "Asymmetric", "Correlation")),
-                    style = "padding-right: 0; width: 19%;"),
+                    style = "padding-right: 0; width: 20%;"),
              column(1,
-                    div(style = "margin-top: 25px; width: 2%; padding: 0;",
+                    div(style = "margin-top: 25px; width: 8%; padding: 0;",
                         actionButton("link_distributions", "",
                                    icon = icon("link"),
                                    class = "btn-sm",
-                                   style = "padding: 2px 2px; font-size: 12px;"))),
+                                   style = "padding: 2px 4px; font-size: 12px;"))),
              column(3, 
                     selectInput("link_arm_function", "Arm Distribution", 
                               choices = c("Linear", "Asymmetric", "Correlation")),
-                    style = "padding-left: 0; width: 19%;"),
+                    style = "padding-left: 0; width: 20%;"),
              column(2, 
                     selectInput("link_arm", "Arm Variable", choices = NULL),
-                    style = "padding-right: 5px; width: 19%;"),
+                    style = "padding-right: 5px; width: 20%;"),
              column(1, 
-                    div(style = "margin-top: 25px; width: 16%;", 
+                    div(style = "margin-top: 25px; width: 12%;", 
                         actionButton("add_link", "Add", 
                                    class = "btn-info btn-sm",
                                    style = "width: 100%;")))
@@ -293,7 +293,6 @@ server <- function(input, output, session) {
         dom = 't',
         paging = FALSE,
         scrollX = FALSE,
-        stripeClasses = FALSE,  # 禁用条纹效果
         columnDefs = list(
           list(
             targets = "_all",
@@ -301,7 +300,7 @@ server <- function(input, output, session) {
           ),
           list(
             targets = c(0, 1, 3, 4),  # State and Arm columns
-            width = "19%"
+            width = "20%"
           ),
           list(
             targets = 2,    # Interaction column
@@ -309,7 +308,7 @@ server <- function(input, output, session) {
           ),
           list(
             targets = 5,    # Operation column
-            width = "16%"
+            width = "12%"
           ),
           list(
             targets = "_all",
@@ -318,10 +317,7 @@ server <- function(input, output, session) {
         )
       )
     ) %>% 
-      formatStyle(
-        columns = 1:6,
-        backgroundColor = 'white'  # 设置所有行的背景色为白色
-      )
+      formatStyle(columns = 1:6)
   })
   
   # Remove link by composite key (State_Variable|Arm_Variable)

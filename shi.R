@@ -22,35 +22,44 @@ ui <- fluidPage(
     )
   ),
   
-  # Middle: State and Arm Features Configuration
+  # State and Arm Features Configuration (side by side)
   fluidRow(
-    column(6, 
+    # State Features Configuration
+    column(6,
            h4("State Features Configuration"),
-           textInput("state_name", "State Name:"),
-           numericInput("state_levels", "Number of Levels:", value = 1, min = 1),
-           selectInput("state_pattern", "Pattern:", choices = c("Loop", "Random")),
-           actionButton("add_state", "Add State Feature"),
+           fluidRow(
+             column(3, textInput("state_name", "Name")),
+             column(3, numericInput("state_levels", "Levels", value = 1, min = 1)),
+             column(3, selectInput("state_pattern", "Pattern", choices = c("Loop", "Random"))),
+             column(3, div(style = "margin-top: 25px;", actionButton("add_state", "Add")))
+           ),
            DTOutput("state_table"),
            actionButton("remove_state", "Remove Selected State")
     ),
-    column(6, 
+    
+    # Arm Features Configuration
+    column(6,
            h4("Arm Features Configuration"),
-           textInput("arm_name", "Arm Name:"),
-           numericInput("arm_levels", "Number of Levels:", value = 1, min = 1),
-           selectInput("arm_pattern", "Pattern:", choices = c("Loop", "Random")),
-           actionButton("add_arm", "Add Arm Feature"),
+           fluidRow(
+             column(3, textInput("arm_name", "Name")),
+             column(3, numericInput("arm_levels", "Levels", value = 1, min = 1)),
+             column(3, selectInput("arm_pattern", "Pattern", choices = c("Loop", "Random"))),
+             column(3, div(style = "margin-top: 25px;", actionButton("add_arm", "Add")))
+           ),
            DTOutput("arm_table"),
            actionButton("remove_arm", "Remove Selected Arm")
     )
   ),
   
-  # Bottom: Link Matrix and Submit
+  # Link Matrix Configuration
   fluidRow(
-    column(12, 
+    column(12,
            h4("Link Matrix Configuration"),
-           selectInput("link_state", "State Feature:", choices = NULL),
-           textInput("link_function", "Link Function:"),
-           selectInput("link_arm", "Arm Feature:", choices = NULL),
+           fluidRow(
+             column(4, selectInput("link_state", "State Feature:", choices = NULL)),
+             column(4, textInput("link_function", "Link Function:")),
+             column(4, selectInput("link_arm", "Arm Feature:", choices = NULL))
+           ),
            actionButton("add_link", "Add Link"),
            DTOutput("link_table"),
            actionButton("remove_link", "Remove Selected Link"),
@@ -63,18 +72,18 @@ ui <- fluidPage(
 
 # Server
 server <- function(input, output, session) {
-  # Reactive: Initialize State, Arm, and Link Data
+  # Initialize State and Arm Data with Default Rows
   state_data <- reactiveVal(data.frame(
-    Name = character(),
-    Levels = numeric(),
-    Pattern = character(),
+    Name = c("Game", "Time"),
+    Levels = c(1, 10),
+    Pattern = c("Loop", "Loop"),
     stringsAsFactors = FALSE
   ))
   
   arm_data <- reactiveVal(data.frame(
-    Name = character(),
-    Levels = numeric(),
-    Pattern = character(),
+    Name = c("Position"),
+    Levels = c(5),
+    Pattern = c("Loop"),
     stringsAsFactors = FALSE
   ))
   

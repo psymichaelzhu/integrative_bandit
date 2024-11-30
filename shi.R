@@ -64,7 +64,7 @@ ui <- fluidPage(
                     style = "padding-right: 5px; width: 21%;"),
              column(3, 
                     selectInput("link_state_function", "State Distribution", 
-                              choices = c("Linear", "Asymmetric", "Correlation")),
+                              choices = c("Uniform", "Linear", "Asymmetric", "Correlation")),
                     style = "padding-right: 5px; width: 21%;"),
              column(1,
                     div(style = "margin-top: 25px; width: 100%; text-align: center;",
@@ -75,7 +75,7 @@ ui <- fluidPage(
                     style = "width: 8%;"),
              column(3, 
                     selectInput("link_arm_function", "Arm Distribution", 
-                              choices = c("Linear", "Asymmetric", "Correlation")),
+                              choices = c("Uniform", "Linear", "Asymmetric", "Correlation")),
                     style = "padding-left: 5px; width: 21%;"),
              column(2, 
                     selectInput("link_arm", "Arm Variable", choices = NULL),
@@ -120,7 +120,7 @@ server <- function(input, output, session) {
 
   observeEvent(input$num_arms, {
     current_data <- arm_data()
-    position_row <- which(current_data$Name == "Position")
+    position_row <- which(current_data$Name == "Index")
     if (length(position_row) > 0) {
       current_data$Levels[position_row] <- input$num_arms
       arm_data(current_data)
@@ -136,8 +136,8 @@ server <- function(input, output, session) {
   ))
   
   arm_data <- reactiveVal(data.frame(
-    Name = c("Position"),
-    Levels = c(5),  # Position will be updated by num_arms
+    Name = c("Index"),
+    Levels = c(5),  # Index will be updated by num_arms
     Pattern = c("Loop"),
     stringsAsFactors = FALSE
   ))
@@ -174,9 +174,9 @@ server <- function(input, output, session) {
         state_data(current_state_data)
       }
       
-      # Update Position levels
+      # Update Index levels
       current_arm_data <- arm_data()
-      position_row <- which(current_arm_data$Name == "Position")
+      position_row <- which(current_arm_data$Name == "Index")
       if (length(position_row) > 0) {
         current_arm_data$Levels[position_row] <- input$num_arms
         arm_data(current_arm_data)
@@ -366,7 +366,7 @@ server <- function(input, output, session) {
   # Remove Arm by Name with link cleanup
   observeEvent(input$remove_arm_name, {
     name_to_remove <- input$remove_arm_name
-    if (!is.null(name_to_remove) && name_to_remove != "Position") {  # Protect default row
+    if (!is.null(name_to_remove) && name_to_remove != "Index") {  # Protect default row
       # First check if this arm is the only one referenced in any link
       current_links <- link_data()
       
@@ -439,7 +439,7 @@ server <- function(input, output, session) {
   output$arm_table <- renderDT({
     df <- arm_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
-      if (i <= 1) return("") # Default row (Position)
+      if (i <= 1) return("") # Default row (Index)
       sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
               df$Name[i])
     })
@@ -525,24 +525,10 @@ server <- function(input, output, session) {
     }
   )
   
-  # Add this to the server section
+    # Keep only this part
   observeEvent(input$link_distributions, {
-    # Toggle button appearance
+    # Toggle button appearance only
     shinyjs::toggleClass("link_distributions", "btn-primary")
-    
-    # If button has primary class, update arm distribution
-    if (input$link_distributions %% 2 == 1) {  # Use counter to track state
-      updateSelectInput(session, "link_arm_function",
-                       selected = input$link_state_function)
-    }
-  })
-  
-  # Add observer to keep distributions in sync when linked
-  observeEvent(input$link_state_function, {
-    if (input$link_distributions %% 2 == 1) {  # Use counter to track state
-      updateSelectInput(session, "link_arm_function",
-                       selected = input$link_state_function)
-    }
   })
 }
 

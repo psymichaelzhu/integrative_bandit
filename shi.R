@@ -33,8 +33,7 @@ ui <- fluidPage(
              column(3, selectInput("state_pattern", "Pattern", choices = c("Loop", "Random"))),
              column(3, div(style = "margin-top: 25px;", actionButton("add_state", "Add")))
            ),
-           DTOutput("state_table"),
-           actionButton("remove_state", "Remove Selected State")
+           DTOutput("state_table")
     ),
     
     # Arm Features Configuration
@@ -46,8 +45,7 @@ ui <- fluidPage(
              column(3, selectInput("arm_pattern", "Pattern", choices = c("Loop", "Random"))),
              column(3, div(style = "margin-top: 25px;", actionButton("add_arm", "Add")))
            ),
-           DTOutput("arm_table"),
-           actionButton("remove_arm", "Remove Selected Arm")
+           DTOutput("arm_table")
     )
   ),
   
@@ -130,19 +128,45 @@ server <- function(input, output, session) {
   })
   
   # Remove Selected State
-  observeEvent(input$remove_state, {
-    selected <- input$state_table_rows_selected
-    if (length(selected) > 0) {
-      state_data(state_data()[-selected, ])
+  observeEvent(input$remove_state_row, {
+    row_to_remove <- input$remove_state_row
+    if (!is.null(row_to_remove) && row_to_remove > 2) {  # Protect default rows
+      # Get the state name that's being removed
+      removed_state <- state_data()[row_to_remove, "Name"]
+      
+      # Remove the state
+      current_data <- state_data()
+      current_data <- current_data[-row_to_remove, ]
+      state_data(current_data)
+      
+      # Remove any links that reference this state
+      current_links <- link_data()
+      links_to_keep <- current_links$State_Feature != removed_state
+      link_data(current_links[links_to_keep, ])
+      
+      # Update the state feature dropdown
       updateSelectInput(session, "link_state", choices = state_data()$Name)
     }
   })
   
   # Remove Selected Arm
-  observeEvent(input$remove_arm, {
-    selected <- input$arm_table_rows_selected
-    if (length(selected) > 0) {
-      arm_data(arm_data()[-selected, ])
+  observeEvent(input$remove_arm_row, {
+    row_to_remove <- input$remove_arm_row
+    if (!is.null(row_to_remove) && row_to_remove > 1) {  # Protect default row
+      # Get the arm name that's being removed
+      removed_arm <- arm_data()[row_to_remove, "Name"]
+      
+      # Remove the arm
+      current_data <- arm_data()
+      current_data <- current_data[-row_to_remove, ]
+      arm_data(current_data)
+      
+      # Remove any links that reference this arm
+      current_links <- link_data()
+      links_to_keep <- current_links$Arm_Feature != removed_arm
+      link_data(current_links[links_to_keep, ])
+      
+      # Update the arm feature dropdown
       updateSelectInput(session, "link_arm", choices = arm_data()$Name)
     }
   })
@@ -157,11 +181,55 @@ server <- function(input, output, session) {
   
   # Render Tables
   output$state_table <- renderDT({
-    datatable(state_data(), selection = "single", rownames = FALSE, options = list(dom = 't', paging = FALSE))
+    df <- state_data()
+    # Add action column (empty for default rows)
+    df$Action <- sapply(1:nrow(df), function(i) {
+      if (i <= 2) return("") # Default rows (Game and Time)
+      sprintf('<button onclick="Shiny.setInputValue(\'remove_state_row\', %d)" class="btn btn-danger btn-sm">Remove</button>', i)
+    })
+    
+    datatable(
+      df,
+      escape = FALSE,
+      selection = "none",
+      rownames = FALSE,
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        columnDefs = list(
+          list(
+            targets = ncol(df) - 1,  # Action column
+            className = 'dt-center'
+          )
+        )
+      )
+    )
   })
   
   output$arm_table <- renderDT({
-    datatable(arm_data(), selection = "single", rownames = FALSE, options = list(dom = 't', paging = FALSE))
+    df <- arm_data()
+    # Add action column (empty for default row)
+    df$Action <- sapply(1:nrow(df), function(i) {
+      if (i <= 1) return("") # Default row (Position)
+      sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_row\', %d)" class="btn btn-danger btn-sm">Remove</button>', i)
+    })
+    
+    datatable(
+      df,
+      escape = FALSE,
+      selection = "none",
+      rownames = FALSE,
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        columnDefs = list(
+          list(
+            targets = ncol(df) - 1,  # Action column
+            className = 'dt-center'
+          )
+        )
+      )
+    )
   })
   
   output$link_table <- renderDT({

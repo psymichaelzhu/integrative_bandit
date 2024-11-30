@@ -3,9 +3,11 @@ library(DT)
 library(ggplot2)
 library(reshape2)
 library(bruceR)
+library(shinyjs)
 
 # UI
 ui <- fluidPage(
+  useShinyjs(),
   titlePanel("Integrative Bandit Parameterization Interface"),
   
   # Initialization of NUM_TRIALS, NUM_ARMS, and SEED
@@ -52,19 +54,39 @@ ui <- fluidPage(
     )
   ),
   
-  # Link Matrix Configuration
+  # Reward Distribution Configuration
   fluidRow(
     column(12,
-           h4("Link Function Configuration"),
+           h4("Reward Distribution Configuration"),
            fluidRow(
-             column(3, selectInput("link_state", "State Variable", choices = NULL)),
-             column(3, selectInput("link_function", "Link Function", 
-                                 choices = c("Linear", "Random", "Correlation"))),
-             column(3, selectInput("link_arm", "Arm Variable", choices = NULL)),
-             column(3, div(style = "margin-top: 25px;",
-                  actionButton("add_link", "Add", class = "btn-info")))
+             column(3, 
+                    selectInput("link_state", "State Variable", choices = NULL),
+                    style = "padding-right: 5px; width: 19%;"),
+             column(3, 
+                    selectInput("link_state_function", "State Distribution", 
+                              choices = c("Linear", "Asymmetric", "Correlation")),
+                    style = "padding-right: 0; width: 19%;"),
+             column(1,
+                    div(style = "margin-top: 25px; width: 2%; padding: 0;",
+                        actionButton("link_distributions", "",
+                                   icon = icon("link"),
+                                   class = "btn-sm",
+                                   style = "padding: 2px 2px; font-size: 12px;"))),
+             column(3, 
+                    selectInput("link_arm_function", "Arm Distribution", 
+                              choices = c("Linear", "Asymmetric", "Correlation")),
+                    style = "padding-left: 0; width: 19%;"),
+             column(2, 
+                    selectInput("link_arm", "Arm Variable", choices = NULL),
+                    style = "padding-right: 5px; width: 19%;"),
+             column(1, 
+                    div(style = "margin-top: 25px; width: 16%;", 
+                        actionButton("add_link", "Add", 
+                                   class = "btn-info btn-sm",
+                                   style = "width: 100%;")))
            ),
-           DTOutput("link_table")
+           div(style = "padding: 0 15px;",
+               DTOutput("link_table"))
     )
   ),
   
@@ -105,7 +127,7 @@ server <- function(input, output, session) {
 
   # Initialize State and Arm Data with Default Rows
   state_data <- reactiveVal(data.frame(
-    Name = c("Game", "Time"),
+    Name = c("Overall", "Time"),
     Levels = c(1, 10),  # Time will be updated by num_trials
     Pattern = c("Loop", "Loop"),
     stringsAsFactors = FALSE
@@ -118,9 +140,12 @@ server <- function(input, output, session) {
     stringsAsFactors = FALSE
   ))
   
+  # Initialize link data with interaction type
   link_data <- reactiveVal(data.frame(
     State_Variable = character(),
-    Link_Function = character(),
+    State_Distribution = character(),
+    Interaction = character(),      # Add interaction type
+    Arm_Distribution = character(),
     Arm_Variable = character(),
     stringsAsFactors = FALSE
   ))
@@ -205,11 +230,13 @@ server <- function(input, output, session) {
     updateSelectInput(session, "link_arm", choices = arm_data()$Name)
   })
   
-  # Add Link with improved duplicate check
+  # Add Link with interaction type
   observeEvent(input$add_link, {
     new_link <- data.frame(
       State_Variable = input$link_state,
-      Link_Function = input$link_function,
+      State_Distribution = input$link_state_function,
+      Interaction = ifelse(input$link_distributions %% 2 == 1, "×", "+"),  # Set interaction based on current state
+      Arm_Distribution = input$link_arm_function,
       Arm_Variable = input$link_arm,
       stringsAsFactors = FALSE
     )
@@ -237,22 +264,26 @@ server <- function(input, output, session) {
   output$link_table <- renderDT({
     df <- link_data()
     if (nrow(df) == 0) {
-      # 创建一个空数据框，但包含所有必要的列
       df <- data.frame(
         State_Variable = character(),
-        Link_Function = character(),
+        State_Distribution = character(),
+        Interaction = character(),
+        Arm_Distribution = character(),
         Arm_Variable = character(),
         Operation = character(),
         stringsAsFactors = FALSE
       )
     } else {
-      # 为现有数据添加 Operation 列
       df$Operation <- sapply(1:nrow(df), function(i) {
         sprintf('<button onclick="Shiny.setInputValue(\'remove_link_key\', \'%s|%s\')" class="btn btn-danger btn-sm">Remove</button>', 
                 df$State_Variable[i], df$Arm_Variable[i])
       })
     }
     
+    colnames(df) <- c("State Variable", "State Distribution", 
+                      "Interaction", "Arm Distribution", 
+                      "Arm Variable", "Operation")
+
     datatable(
       df,
       escape = FALSE,
@@ -261,18 +292,36 @@ server <- function(input, output, session) {
       options = list(
         dom = 't',
         paging = FALSE,
+        scrollX = FALSE,
+        stripeClasses = FALSE,  # 禁用条纹效果
         columnDefs = list(
           list(
             targets = "_all",
-            className = 'dt-left'
+            className = 'dt-center'
           ),
           list(
-            targets = ncol(df) - 1,
-            className = 'dt-center'
+            targets = c(0, 1, 3, 4),  # State and Arm columns
+            width = "19%"
+          ),
+          list(
+            targets = 2,    # Interaction column
+            width = "8%"
+          ),
+          list(
+            targets = 5,    # Operation column
+            width = "16%"
+          ),
+          list(
+            targets = "_all",
+            headerClassName = 'dt-left'
           )
         )
       )
-    )
+    ) %>% 
+      formatStyle(
+        columns = 1:6,
+        backgroundColor = 'white'  # 设置所有行的背景色为白色
+      )
   })
   
   # Remove link by composite key (State_Variable|Arm_Variable)
@@ -296,7 +345,7 @@ server <- function(input, output, session) {
   # Remove State by Name with link cleanup
   observeEvent(input$remove_state_name, {
     name_to_remove <- input$remove_state_name
-    if (!is.null(name_to_remove) && !(name_to_remove %in% c("Game", "Time"))) {  # Protect default rows
+    if (!is.null(name_to_remove) && !(name_to_remove %in% c("Overall", "Time"))) {  # Protect default rows
       # First remove any links that reference this state
       current_links <- link_data()
       links_to_keep <- current_links$State_Variable != name_to_remove
@@ -316,10 +365,27 @@ server <- function(input, output, session) {
   observeEvent(input$remove_arm_name, {
     name_to_remove <- input$remove_arm_name
     if (!is.null(name_to_remove) && name_to_remove != "Position") {  # Protect default row
-      # First remove any links that reference this arm
+      # First check if this arm is the only one referenced in any link
       current_links <- link_data()
-      links_to_keep <- current_links$Arm_Variable != name_to_remove
-      link_data(current_links[links_to_keep, , drop = FALSE])
+      
+      # Count how many unique arm variables are used in links
+      unique_arms_in_links <- unique(current_links$Arm_Variable)
+      
+      # If this arm is in use and it's the only arm variable being used
+      if (name_to_remove %in% unique_arms_in_links && length(unique_arms_in_links) == 1) {
+        # Clear all links first
+        link_data(data.frame(
+          State_Variable = character(),
+          State_Distribution = character(),
+          Arm_Variable = character(),
+          Arm_Distribution = character(),
+          stringsAsFactors = FALSE
+        ))
+      } else {
+        # Remove only links that reference this arm
+        links_to_keep <- current_links$Arm_Variable != name_to_remove
+        link_data(current_links[links_to_keep, , drop = FALSE])
+      }
       
       # Then remove the arm
       current_data <- arm_data()
@@ -335,7 +401,7 @@ server <- function(input, output, session) {
   output$state_table <- renderDT({
     df <- state_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
-      if (i <= 2) return("") # Default rows (Game and Time)
+      if (i <= 2) return("") # Default rows (Overall and Time)
       sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
               df$Name[i])
     })
@@ -414,8 +480,12 @@ server <- function(input, output, session) {
   
   output$reward_matrix <- renderPlot({
     mat <- reward_matrix()
-    heatmap_data <- melt(mat)
-    colnames(heatmap_data) <- c("Trial", "Arm", "Value")
+    heatmap_data <- data.frame(
+      Trial = rep(1:nrow(mat), ncol(mat)),
+      Arm = rep(1:ncol(mat), each = nrow(mat)),
+      Value = as.vector(mat)
+    )
+    
     ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
       geom_tile() +
       scale_fill_viridis_c() +
@@ -452,6 +522,26 @@ server <- function(input, output, session) {
       saveRDS(config, file)
     }
   )
+  
+  # Add this to the server section
+  observeEvent(input$link_distributions, {
+    # Toggle button appearance
+    shinyjs::toggleClass("link_distributions", "btn-primary")
+    
+    # If button has primary class, update arm distribution
+    if (input$link_distributions %% 2 == 1) {  # Use counter to track state
+      updateSelectInput(session, "link_arm_function",
+                       selected = input$link_state_function)
+    }
+  })
+  
+  # Add observer to keep distributions in sync when linked
+  observeEvent(input$link_state_function, {
+    if (input$link_distributions %% 2 == 1) {  # Use counter to track state
+      updateSelectInput(session, "link_arm_function",
+                       selected = input$link_state_function)
+    }
+  })
 }
 
 # Run App

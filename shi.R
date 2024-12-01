@@ -108,19 +108,23 @@ ui <- fluidPage(
 
 # Add this helper function before the server function
 create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
+  # Determine if this is for state or arm based on dimensions
+  is_state <- num_trials == nrow
+  matrix_rows <- if(is_state) num_trials else num_arms
+  
   if (pattern == "Loop") {
     # Create repeating sequence
-    values <- rep(1:levels, length.out = num_trials)
+    values <- rep(1:levels, length.out = matrix_rows)
     # Convert to one-hot encoding matrix
-    matrix <- matrix(0, nrow = num_trials, ncol = levels)
-    for (i in 1:num_trials) {
+    matrix <- matrix(0, nrow = matrix_rows, ncol = levels)
+    for (i in 1:matrix_rows) {
       matrix[i, values[i]] <- 1
     }
   } else { # Random pattern
     # Random assignment with equal probability
-    values <- sample(1:levels, num_trials, replace = TRUE)
-    matrix <- matrix(0, nrow = num_trials, ncol = levels)
-    for (i in 1:num_trials) {
+    values <- sample(1:levels, matrix_rows, replace = TRUE)
+    matrix <- matrix(0, nrow = matrix_rows, ncol = levels)
+    for (i in 1:matrix_rows) {
       matrix[i, values[i]] <- 1
     }
   }
@@ -129,6 +133,11 @@ create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
 
 # Server
 server <- function(input, output, session) {
+  # Store matrices for each variable
+  state_matrices <- reactiveVal(list())
+  arm_matrices <- reactiveVal(list())
+  distribution_matrices <- reactiveVal(list())
+
   # Update default rows when num_trials or num_arms changes
   observeEvent(input$num_trials, {
     current_data <- state_data()
@@ -214,6 +223,20 @@ server <- function(input, output, session) {
       stringsAsFactors = FALSE
     )
     
+    # Create and print matrix for this state variable
+    matrix <- create_variable_matrix(
+      input$state_levels,
+      input$state_pattern,
+      input$num_trials,
+      input$state_levels
+    )
+    print(matrix)
+    
+    # Store matrix with variable name as key
+    current_matrices <- state_matrices()
+    current_matrices[[input$state_name]] <- matrix
+    state_matrices(current_matrices)
+    
     # Check for duplicate
     current_data <- state_data()
     duplicate_idx <- which(current_data$Name == input$state_name)
@@ -237,6 +260,20 @@ server <- function(input, output, session) {
       Pattern = input$arm_pattern,
       stringsAsFactors = FALSE
     )
+    
+    # Create and print matrix for this arm variable
+    matrix <- create_variable_matrix(
+      input$arm_levels,
+      input$arm_pattern,
+      input$num_arms,
+      input$arm_levels
+    )
+    print(matrix)
+    
+    # Store matrix with variable name as key
+    current_matrices <- arm_matrices()
+    current_matrices[[input$arm_name]] <- matrix
+    arm_matrices(current_matrices)
     
     # Check for duplicate
     current_data <- arm_data()
@@ -286,7 +323,7 @@ server <- function(input, output, session) {
     state_levels <- state_data()[state_data()$Name == input$link_state, "Levels"]
     arm_levels <- arm_data()[arm_data()$Name == input$link_arm, "Levels"]
     
-    # Generate distribution matrix
+    # Create and print distribution matrix
     dist_matrix <- create_distribution_matrix(
       state_levels = state_levels,
       arm_levels = arm_levels,
@@ -295,6 +332,13 @@ server <- function(input, output, session) {
       state_dist_type = input$link_state_function,
       arm_dist_type = input$link_arm_function
     )
+    print(dist_matrix)
+    
+    # Store matrix with composite key
+    key <- paste(input$link_state, input$link_arm, sep = "|")
+    current_matrices <- distribution_matrices()
+    current_matrices[[key]] <- dist_matrix
+    distribution_matrices(current_matrices)
   })
   
   # Link table rendering with improved remove button
@@ -382,55 +426,47 @@ server <- function(input, output, session) {
   # Remove State by Name with link cleanup
   observeEvent(input$remove_state_name, {
     name_to_remove <- input$remove_state_name
-    if (!is.null(name_to_remove) && !(name_to_remove %in% c("Overall", "Time"))) {  # Protect default rows
-      # First remove any links that reference this state
-      current_links <- link_data()
-      links_to_keep <- current_links$State_Variable != name_to_remove
-      link_data(current_links[links_to_keep, , drop = FALSE])
-      
-      # Then remove the state
-      current_data <- state_data()
-      current_data <- current_data[current_data$Name != name_to_remove, ]
-      state_data(current_data)
-      
-      # Update the state feature dropdown
-      updateSelectInput(session, "link_state", choices = state_data()$Name)
+    if (!is.null(name_to_remove) && !(name_to_remove %in% c("Overall", "Time"))) {
+        # Remove the stored matrix
+        current_matrices <- state_matrices()
+        current_matrices[[name_to_remove]] <- NULL
+        state_matrices(current_matrices)
+        
+        # Remove any links that reference this state
+        current_links <- link_data()
+        links_to_keep <- current_links$State_Variable != name_to_remove
+        link_data(current_links[links_to_keep, , drop = FALSE])
+        
+        # Remove associated distribution matrices
+        current_dist_matrices <- distribution_matrices()
+        keys_to_remove <- grep(paste0("^", name_to_remove, "\\|"), names(current_dist_matrices))
+        if (length(keys_to_remove) > 0) {
+            current_dist_matrices[keys_to_remove] <- NULL
+            distribution_matrices(current_dist_matrices)
+        }
+        
+        # Then remove the state
+        current_data <- state_data()
+        current_data <- current_data[current_data$Name != name_to_remove, ]
+        state_data(current_data)
+        
+        updateSelectInput(session, "link_state", choices = state_data()$Name)
     }
   })
   
   # Remove Arm by Name with link cleanup
   observeEvent(input$remove_arm_name, {
     name_to_remove <- input$remove_arm_name
-    if (!is.null(name_to_remove) && name_to_remove != "Index") {  # Protect default row
-      # First check if this arm is the only one referenced in any link
-      current_links <- link_data()
-      
-      # Count how many unique arm variables are used in links
-      unique_arms_in_links <- unique(current_links$Arm_Variable)
-      
-      # If this arm is in use and it's the only arm variable being used
-      if (name_to_remove %in% unique_arms_in_links && length(unique_arms_in_links) == 1) {
-        # Clear all links first
-        link_data(data.frame(
-          State_Variable = character(),
-          State_Distribution = character(),
-          Arm_Variable = character(),
-          Arm_Distribution = character(),
-          stringsAsFactors = FALSE
-        ))
-      } else {
-        # Remove only links that reference this arm
+    if (!is.null(name_to_remove) && name_to_remove != "Index") {
+        # Remove the stored matrix
+        current_matrices <- arm_matrices()
+        current_matrices[[name_to_remove]] <- NULL
+        arm_matrices(current_matrices)
+        
+        # Remove any links that reference this arm
+        current_links <- link_data()
         links_to_keep <- current_links$Arm_Variable != name_to_remove
         link_data(current_links[links_to_keep, , drop = FALSE])
-      }
-      
-      # Then remove the arm
-      current_data <- arm_data()
-      current_data <- current_data[current_data$Name != name_to_remove, ]
-      arm_data(current_data)
-      
-      # Update the arm feature dropdown
-      updateSelectInput(session, "link_arm", choices = arm_data()$Name)
     }
   })
   
@@ -613,58 +649,23 @@ server <- function(input, output, session) {
     if (nrow(links) == 0) return(matrix(0, nrow = input$num_trials, ncol = input$num_arms))
     
     final_matrix <- matrix(0, nrow = input$num_trials, ncol = input$num_arms)
+    stored_state_matrices <- state_matrices()
+    stored_arm_matrices <- arm_matrices()
+    stored_dist_matrices <- distribution_matrices()
     
     for (i in 1:nrow(links)) {
-      # Get state variable info
       state_var <- links$State_Variable[i]
-      state_info <- state_data()[state_data()$Name == state_var, ]
-      
-      # Get arm variable info
       arm_var <- links$Arm_Variable[i]
-      arm_info <- arm_data()[arm_data()$Name == arm_var, ]
       
-      # Create matrices
-      state_matrix <- create_variable_matrix(
-        state_info$Levels, 
-        state_info$Pattern, 
-        input$num_trials,
-        state_info$Levels  # Changed: use state_info$Levels instead of num_arms
-      )
+      # Use stored matrices instead of regenerating
+      state_matrix <- stored_state_matrices[[state_var]]
+      arm_matrix <- stored_arm_matrices[[arm_var]]
+      dist_matrix <- stored_dist_matrices[[paste(state_var, arm_var, sep = "|")]]
       
-      arm_matrix <- create_variable_matrix(
-        arm_info$Levels,
-        arm_info$Pattern,
-        input$num_arms,
-        arm_info$Levels
-      )
+      # Matrix multiplication
+      temp_matrix <- state_matrix %*% dist_matrix
+      pair_matrix <- temp_matrix %*% t(arm_matrix)
       
-      # Create distribution matrix
-      dist_matrix <- create_distribution_matrix(
-        state_levels = state_info$Levels,
-        arm_levels = arm_info$Levels,
-        num_trials = input$num_trials,
-        num_arms = input$num_arms,
-        state_dist_type = links$State_Distribution[i],
-        arm_dist_type = links$Arm_Distribution[i]
-      )
-      
-      # Print matrix dimensions for debugging
-      cat("Dimensions:\n")
-      cat("State matrix:", dim(state_matrix), "\n")
-      cat("Distribution matrix:", dim(dist_matrix), "\n")
-      cat("Arm matrix:", dim(arm_matrix), "\n")
-      
-      # Matrix multiplication with dimension checks
-      # state_matrix: num_trials × state_levels
-      # dist_matrix: state_levels × arm_levels
-      # arm_matrix: arm_levels × num_arms
-      
-      # First multiplication
-      temp_matrix <- state_matrix %*% dist_matrix  # num_trials × arm_levels
-      # Second multiplication
-      pair_matrix <- temp_matrix %*% t(arm_matrix)  # num_trials × num_arms
-      
-      # Add to final matrix
       final_matrix <- final_matrix + pair_matrix
     }
     

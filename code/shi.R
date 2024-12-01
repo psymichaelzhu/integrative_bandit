@@ -147,9 +147,6 @@ generate_sequence <- function(n_levels, distribution_type) {
 # Distribution Matrix Creation
 create_distribution_matrix <- function(state_levels, arm_levels, num_trials, num_arms,
                                      state_dist_type, arm_dist_type) {
-  # Set random seed for reproducibility
-  set.seed(NULL)  # Reset seed to ensure independent sampling
-  
   # Generate state distribution sequence
   state_seq <- generate_sequence(state_levels, state_dist_type)
   
@@ -230,6 +227,31 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
 # Server =====================================================================
 
 server <- function(input, output, session) {
+  # Add auto-update trigger
+  auto_update_trigger <- reactive({
+    list(
+      input$num_trials,
+      input$num_arms,
+      input$seed
+    )
+  })
+  
+  # Automatically update reward matrix when basic parameters change
+  observeEvent(auto_update_trigger(), {
+    # Set seed before generating new matrix
+    set.seed(input$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), input$num_trials, input$num_arms)
+    reward_matrix(new_matrix)
+  })
+
+  # Keep existing update_demo button for manual updates
+  observeEvent(input$update_demo, {
+    # Set seed before generating new matrix
+    set.seed(input$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), input$num_trials, input$num_arms)
+    reward_matrix(new_matrix)
+  })
+
   # Update default rows when num_trials or num_arms changes
   observeEvent(input$num_trials, {
     current_data <- state_data()
@@ -611,17 +633,6 @@ server <- function(input, output, session) {
   # Reward Matrix Heatmap with seed control
   reward_matrix <- reactiveVal(matrix(0, nrow = 10, ncol = 5))  # Default size
 
-  # Update the reward matrix when num_trials or num_arms changes
-  observe({
-    reward_matrix(matrix(0, nrow = input$num_trials, ncol = input$num_arms))
-  })
-
-  # Modify the update demo button handler:
-  observeEvent(input$update_demo, {
-    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), input$num_trials, input$num_arms)
-    reward_matrix(new_matrix)
-  })
-
   # Modify the reward matrix plot to use the reactive value:
   output$reward_matrix <- renderPlot({
     mat <- reward_matrix()
@@ -680,8 +691,6 @@ server <- function(input, output, session) {
 shinyApp(ui, server)
 
 
-#seed
-#乘法
 #储存
 #汇总
 #print?
@@ -694,4 +703,5 @@ shinyApp(ui, server)
 #标准化
 
 
-#顶部更新
+#明确的刻度
+#种子 选择 乘法

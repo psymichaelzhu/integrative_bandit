@@ -8,6 +8,14 @@ library(shinyjs)
 
 ui <- fluidPage(
   useShinyjs(),
+  tags$head(
+    tags$style(HTML("
+      .text-muted {
+        color: #6c757d !important;
+        opacity: 0.8;
+      }
+    "))
+  ),
   titlePanel("Integrative Bandit Parameterization Interface"),
   
   # Initialization of NUM_TRIALS, NUM_ARMS, and SEED
@@ -325,13 +333,13 @@ server <- function(input, output, session) {
   link_data <- reactiveVal(data.frame(
     State_Variable = character(),
     State_Distribution = character(),
-    Interaction = character(),      # Add interaction type
+    Interaction = character(),
     Arm_Distribution = character(),
     Arm_Variable = character(),
     stringsAsFactors = FALSE
   ))
   
-  # Initialize choices for link dropdowns
+  # Add new reactive values to track link state
   observe({
     # Get current selections
     current_state <- input$link_state
@@ -341,12 +349,26 @@ server <- function(input, output, session) {
     state_choices <- state_data()$Name
     arm_choices <- arm_data()$Name
     
-    # Update state dropdown, maintaining current selection if valid
-    updateSelectInput(session, "link_state", 
-                     choices = state_choices,
-                     selected = if (current_state %in% state_choices) current_state else state_choices[1])
+    # Check if distributions are linked
+    if (input$link_distributions %% 2 == 1) {
+      # Linked state - normal dropdown behavior
+      updateSelectInput(session, "link_state", 
+                       choices = state_choices,
+                       selected = if (current_state %in% state_choices) current_state else state_choices[1])
+      updateSelectInput(session, "link_state_function",
+                       choices = c("Independent", "Monotonic", "Random Walk"),
+                       selected = input$link_state_function)
+    } else {
+      # Unlinked state - static "Time" and "Identical"
+      updateSelectInput(session, "link_state",
+                       choices = "Time",
+                       selected = "Time")
+      updateSelectInput(session, "link_state_function",
+                       choices = "Identical",
+                       selected = "Identical")
+    }
     
-    # Update arm dropdown, maintaining current selection if valid
+    # Always update arm dropdown
     updateSelectInput(session, "link_arm", 
                      choices = arm_choices,
                      selected = if (current_arm %in% arm_choices) current_arm else arm_choices[1])
@@ -724,10 +746,23 @@ server <- function(input, output, session) {
     }
   )
   
-    # Keep only this part
+  # Modify the link distributions observer
   observeEvent(input$link_distributions, {
-    # Toggle button appearance only
+    # Toggle button appearance
     shinyjs::toggleClass("link_distributions", "btn-primary")
+    
+    # Add disabled state to inputs when unlinked
+    if (input$link_distributions %% 2 == 0) {
+      shinyjs::addCssClass("link_state", "text-muted")
+      shinyjs::addCssClass("link_state_function", "text-muted")
+      shinyjs::disable("link_state")
+      shinyjs::disable("link_state_function")
+    } else {
+      shinyjs::removeCssClass("link_state", "text-muted")
+      shinyjs::removeCssClass("link_state_function", "text-muted")
+      shinyjs::enable("link_state")
+      shinyjs::enable("link_state_function")
+    }
   })
 }
 

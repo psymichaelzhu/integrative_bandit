@@ -104,6 +104,9 @@ ui <- fluidPage(
   fluidRow(
     column(12,
            div(style = "margin-top: 20px; text-align: center;",
+               actionButton("check_link", "Check", 
+                          class = "btn-primary",
+                          style = "margin-right: 10px"),
                actionButton("update_demo", "Update Demo", 
                           class = "btn-primary",
                           style = "margin-right: 10px"),
@@ -525,7 +528,7 @@ server <- function(input, output, session) {
     datatable(
       df,
       escape = FALSE,
-      selection = "none",
+      selection = 'single',  # 启用单行选择
       rownames = FALSE,
       options = list(
         dom = 't',
@@ -844,6 +847,50 @@ server <- function(input, output, session) {
 
   # Modify reward matrix generation to use safe parameters
   observeEvent(auto_update_trigger(), {
+    set.seed(parameters$seed)
+    new_matrix <- summary_reward_distribution(
+      link_data(), 
+      state_data(), 
+      arm_data(), 
+      parameters$num_trials, 
+      parameters$num_arms
+    )
+    reward_matrix(new_matrix)
+  })
+
+  # 处理 Check 按钮点击事件
+  observeEvent(input$check_link, {
+    # 获取选中的行
+    selected_row <- input$link_table_rows_selected
+    
+    if (!is.null(selected_row)) {
+      # 获取选中的链接数据
+      link <- link_data()[selected_row, , drop = FALSE]
+      
+      # 获取相关变量的 levels
+      state_levels <- state_data()[state_data()$Name == link$State_Variable, "Levels"]
+      arm_levels <- arm_data()[arm_data()$Name == link$Arm_Variable, "Levels"]
+      
+      # 生成单个链接的分布矩阵
+      set.seed(parameters$seed)
+      single_matrix <- summary_reward_distribution(
+        link,  # 只传入选中的链接
+        state_data(), 
+        arm_data(), 
+        parameters$num_trials, 
+        parameters$num_arms
+      )
+      
+      # 更新热图
+      reward_matrix(single_matrix)
+    } else {
+      # 如果没有选中行，显示提示消息
+      showNotification("Please select a link first", type = "warning")
+    }
+  })
+
+  # 添加一个恢复完整视图的功能到 Update Demo 按钮
+  observeEvent(input$update_demo, {
     set.seed(parameters$seed)
     new_matrix <- summary_reward_distribution(
       link_data(), 

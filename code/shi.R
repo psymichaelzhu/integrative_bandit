@@ -718,8 +718,8 @@ server <- function(input, output, session) {
       theme_minimal() +
       labs(x = "Trial", y = "Arm", fill = "Reward") +
       theme_bruce() +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0))
+      scale_x_continuous(expand = c(0, 0), breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10))))) +
+      scale_y_continuous(expand = c(0, 0), breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10))))) 
   })
   
   # Update Demo (renamed from Generate Demo)
@@ -769,6 +769,82 @@ server <- function(input, output, session) {
       shinyjs::enable("link_state_function")
     }
   })
+
+  # Add reactive values to safely store parameters
+  parameters <- reactiveValues(
+    num_trials = 10,
+    num_arms = 5,
+    seed = 42
+  )
+
+  # Safe update observers
+  observeEvent(input$num_trials, {
+    # Validate input
+    new_value <- input$num_trials
+    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
+      updateNumericInput(session, "num_trials", value = parameters$num_trials)
+    } else {
+      parameters$num_trials <- new_value
+      
+      # Update Time levels
+      current_data <- state_data()
+      time_row <- which(current_data$Name == "Time")
+      if (length(time_row) > 0) {
+        current_data$Levels[time_row] <- parameters$num_trials
+        state_data(current_data)
+      }
+    }
+  })
+
+  observeEvent(input$num_arms, {
+    # Validate input
+    new_value <- input$num_arms
+    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
+      updateNumericInput(session, "num_arms", value = parameters$num_arms)
+    } else {
+      parameters$num_arms <- new_value
+      
+      # Update Index levels
+      current_data <- arm_data()
+      position_row <- which(current_data$Name == "Index")
+      if (length(position_row) > 0) {
+        current_data$Levels[position_row] <- parameters$num_arms
+        arm_data(current_data)
+      }
+    }
+  })
+
+  observeEvent(input$seed, {
+    # Validate input
+    new_value <- input$seed
+    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
+      updateNumericInput(session, "seed", value = parameters$seed)
+    } else {
+      parameters$seed <- new_value
+    }
+  })
+
+  # Modify auto_update_trigger to use safe parameters
+  auto_update_trigger <- reactive({
+    list(
+      parameters$num_trials,
+      parameters$num_arms,
+      parameters$seed
+    )
+  })
+
+  # Modify reward matrix generation to use safe parameters
+  observeEvent(auto_update_trigger(), {
+    set.seed(parameters$seed)
+    new_matrix <- summary_reward_distribution(
+      link_data(), 
+      state_data(), 
+      arm_data(), 
+      parameters$num_trials, 
+      parameters$num_arms
+    )
+    reward_matrix(new_matrix)
+  })
 }
 
 # Run App =====================================================================
@@ -815,3 +891,6 @@ shinyApp(ui, server)
 
 
 #Reactive
+
+
+#cost

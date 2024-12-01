@@ -724,21 +724,55 @@ server <- function(input, output, session) {
 shinyApp(ui, server)
 
 
-
-
-#删除identical
-#添加randomwalk
-
 #刻度level:order还是普通categorical
+#Random 变成shuffle
+
+
+
 #混合和系数:base
-# 类型：线性/对称，random walk, shuffle； 单独的； conditional on; 种子
+# 类型： 单独的； conditional on(种子)
 #保存
 
 
 #标准化
 #改名：Position和Trial
-#Increasing
+#Increasing 线性/对称 随机单边
+#shuffle: 几个
 
+
+#删除identical
+#删除overall
+
+
+
+multi-armed bandit
+shuffle(Position)
+
+structural bandit
+//order variable: close or not
+spatial: increasing(Position) random side
+spatial: randomwalk(Position) 
+conceptual: increasing(Brightness)
+conceptual: increasing(Number)
+//categorical variable: same or not
+conceptual: shuffle(Shape) //levels<num_trials
+
+BeanFest: not all variables are shuffled
+
+contextual bandit
+shuffle(Shape)|shuffle(Planet)
+//shuffle seed的逻辑是：首先以Planet生成sequence，然后shuffle shape level次
+//取保不同：所有组合
+
+
+restless bandit
+increasing(Time)|shuffle(Position)
+randomwalk(Time)|shuffle(Position)
+
+
+horizontal (information asymmetry): forced phase
+RUTU (uncertainty asymmetry): uncertainty 显示
+learning trap: feedback显示
 
 
 

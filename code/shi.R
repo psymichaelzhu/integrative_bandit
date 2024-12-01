@@ -1,10 +1,10 @@
-# UI ==========================================================================
 library(shiny)
 library(DT)
 library(ggplot2)
 library(reshape2)
 library(bruceR)
 library(shinyjs)
+# UI ==========================================================================
 
 ui <- fluidPage(
   useShinyjs(),
@@ -143,7 +143,7 @@ create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
 }
 
 # Sequence Generation
-generate_sequence <- function(n_levels, distribution_type) {
+generate_sequence <- function(n_levels, distribution_type, interaction_type = "+", arm_index = NULL) {
   switch(distribution_type,
     "Identical" = {
       # Single sample repeated for all levels
@@ -179,27 +179,42 @@ generate_sequence <- function(n_levels, distribution_type) {
 
 # Distribution Matrix Creation
 create_distribution_matrix <- function(state_levels, arm_levels, 
-                                     state_dist_type, arm_dist_type) {
-  # Generate state distribution sequence
-  state_seq <- generate_sequence(state_levels, state_dist_type)
-  
-  # Generate arm distribution sequence
-  arm_seq <- generate_sequence(arm_levels, arm_dist_type)
-  
-  # Create distribution matrix
-  dist_matrix <- outer(state_seq, arm_seq, "+")
-  
-  # Safe normalization to 0-100 range
-  range_diff <- max(dist_matrix) - min(dist_matrix)
-  if (range_diff == 0) {
-    # If all values are the same, set to middle value (50)
-    dist_matrix[] <- 50
-  } else {
-    # Normal normalization when values differ
-    dist_matrix <- (dist_matrix - min(dist_matrix)) / range_diff * 100
-  }
-  
-  return(dist_matrix)
+                                     state_dist_type, arm_dist_type,
+                                     interaction_type = "+") {
+    
+    if (interaction_type == "×") {
+        # For Random Walk × Independent case, generate matrix directly
+        sapply(1:arm_levels, function(arm) {
+            # Save current seed state
+            old_seed <- .Random.seed
+            # Generate new seed based on arm index
+            local_seed <- sample.int(.Machine$integer.max, 1) + arm
+            set.seed(local_seed)
+            print(local_seed)
+            # Generate random walk sequence
+            result <- generate_sequence(state_levels, "Random Walk")
+            
+            # Restore original seed state
+            .Random.seed <<- old_seed
+            
+            result
+        })
+    } else {
+        # For all other cases, use addition-based logic
+        state_seq <- generate_sequence(state_levels, state_dist_type)
+        arm_seq <- generate_sequence(arm_levels, arm_dist_type)
+        
+        dist_matrix <- outer(state_seq, arm_seq, "+")
+        
+        # Normalize to 0-100 range
+        range_diff <- max(dist_matrix) - min(dist_matrix)
+        if (range_diff == 0) {
+            dist_matrix[] <- 50
+        } else {
+            dist_matrix <- (dist_matrix - min(dist_matrix)) / range_diff * 100
+        }
+        dist_matrix
+    }
 }
 
 # Reward Distribution Summary
@@ -237,14 +252,9 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
       state_levels = state_info$Levels,
       arm_levels = arm_info$Levels,
       state_dist_type = links$State_Distribution[i],
-      arm_dist_type = links$Arm_Distribution[i]
+      arm_dist_type = links$Arm_Distribution[i],
+      interaction_type = links$Interaction[i]
     )
-    
-    # Print matrix dimensions for debugging
-    cat("Dimensions:\n")
-    cat("State matrix:", dim(state_matrix), "\n")
-    cat("Distribution matrix:", dim(dist_matrix), "\n")
-    cat("Arm matrix:", dim(arm_matrix), "\n")
     
     # Matrix multiplication
     temp_matrix <- state_matrix %*% dist_matrix
@@ -774,26 +784,23 @@ shinyApp(ui, server)
 
 
 
-#混合和系数:base
-# 类型： 单独的； conditional on(种子)
 #保存
 
 
 #标准化
 #改名：Position和Trial
-#Increasing 线性/对称 随机单边
+#Increasing 线性/对称 机单边
 #shuffle: 几个
 #刻度level:order还是普通categorical
 #Random 变成shuffle
 
 
-#删除identical
 #删除overall
 
 
 #实验程序
 #不确定性：显示
-
+#其他部分的选择
 
 # 组合图片 UI
 
@@ -801,6 +808,6 @@ shinyApp(ui, server)
 #Reactive
 
 
-#add之后的更新
-#断联结 自动time identical
 
+
+#log

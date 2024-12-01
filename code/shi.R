@@ -1,3 +1,4 @@
+# UI ==========================================================================
 library(shiny)
 library(DT)
 library(ggplot2)
@@ -5,7 +6,6 @@ library(reshape2)
 library(bruceR)
 library(shinyjs)
 
-# UI
 ui <- fluidPage(
   useShinyjs(),
   titlePanel("Integrative Bandit Parameterization Interface"),
@@ -106,7 +106,9 @@ ui <- fluidPage(
   )
 )
 
-# Add this helper function before the server function
+# Helper Functions =============================================================
+
+# Matrix Creation
 create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
   if (pattern == "Loop") {
     # Create repeating sequence
@@ -127,7 +129,106 @@ create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
   return(matrix)
 }
 
-# Server
+# Sequence Generation
+generate_sequence <- function(n_levels, distribution_type) {
+  if (distribution_type == "Identical") {
+    # Single sample repeated for all levels
+    rep(runif(1, 0, 100), n_levels)
+  } else if (distribution_type == "Independent") {
+    # Independent samples for each level
+    runif(n_levels, 0, 100)
+  } else if (distribution_type == "Monotonic") {
+    # Two random points, uniform interpolation
+    bounds <- sort(runif(2, 0, 100))
+    seq(bounds[1], bounds[2], length.out = n_levels)
+  }
+}
+
+# Distribution Matrix Creation
+create_distribution_matrix <- function(state_levels, arm_levels, num_trials, num_arms,
+                                     state_dist_type, arm_dist_type) {
+  # Set random seed for reproducibility
+  set.seed(NULL)  # Reset seed to ensure independent sampling
+  
+  # Generate state distribution sequence
+  state_seq <- generate_sequence(state_levels, state_dist_type)
+  
+  # Generate arm distribution sequence
+  arm_seq <- generate_sequence(arm_levels, arm_dist_type)
+  
+  # Create distribution matrix
+  dist_matrix <- outer(state_seq, arm_seq, "+")
+  
+  # Normalize to 0-100 range
+  dist_matrix <- (dist_matrix - min(dist_matrix)) / (max(dist_matrix) - min(dist_matrix)) * 100
+  
+  return(dist_matrix)
+}
+
+# Reward Distribution Summary
+summary_reward_distribution <- function(links, state_data, arm_data, num_trials, num_arms) {
+  if (nrow(links) == 0) return(matrix(0, nrow = num_trials, ncol = num_arms))
+  
+  final_matrix <- matrix(0, nrow = num_trials, ncol = num_arms)
+  
+  for (i in 1:nrow(links)) {
+    # Get state variable info
+    state_var <- links$State_Variable[i]
+    state_info <- state_data[state_data$Name == state_var, ]
+    
+    # Get arm variable info
+    arm_var <- links$Arm_Variable[i]
+    arm_info <- arm_data[arm_data$Name == arm_var, ]
+    
+    # Create matrices
+    state_matrix <- create_variable_matrix(
+      state_info$Levels, 
+      state_info$Pattern, 
+      num_trials,
+      state_info$Levels
+    )
+    
+    arm_matrix <- create_variable_matrix(
+      arm_info$Levels,
+      arm_info$Pattern,
+      num_arms,
+      arm_info$Levels
+    )
+    
+    # Create distribution matrix
+    dist_matrix <- create_distribution_matrix(
+      state_levels = state_info$Levels,
+      arm_levels = arm_info$Levels,
+      num_trials = num_trials,
+      num_arms = num_arms,
+      state_dist_type = links$State_Distribution[i],
+      arm_dist_type = links$Arm_Distribution[i]
+    )
+    
+    # Print matrix dimensions for debugging
+    cat("Dimensions:\n")
+    cat("State matrix:", dim(state_matrix), "\n")
+    cat("Distribution matrix:", dim(dist_matrix), "\n")
+    cat("Arm matrix:", dim(arm_matrix), "\n")
+    
+    # Matrix multiplication
+    temp_matrix <- state_matrix %*% dist_matrix
+    pair_matrix <- temp_matrix %*% t(arm_matrix)
+    
+    # Add to final matrix
+    final_matrix <- final_matrix + pair_matrix
+  }
+  
+  # Normalize to 0-100 range
+  if (max(final_matrix) != min(final_matrix)) {
+    final_matrix <- (final_matrix - min(final_matrix)) / (max(final_matrix) - min(final_matrix)) * 100
+  }
+  
+  return(final_matrix)
+}
+
+# Server =====================================================================
+
 server <- function(input, output, session) {
   # Update default rows when num_trials or num_arms changes
   observeEvent(input$num_trials, {
@@ -517,7 +618,7 @@ server <- function(input, output, session) {
 
   # Modify the update demo button handler:
   observeEvent(input$update_demo, {
-    new_matrix <- summary_reward_distribution()
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), input$num_trials, input$num_arms)
     reward_matrix(new_matrix)
   })
 
@@ -572,110 +673,25 @@ server <- function(input, output, session) {
     # Toggle button appearance only
     shinyjs::toggleClass("link_distributions", "btn-primary")
   })
-  
-  # Add these helper functions at the server start
-  generate_sequence <- function(n_levels, distribution_type) {
-    if (distribution_type == "Identical") {
-      # Single sample repeated for all levels
-      rep(runif(1, 0, 100), n_levels)
-    } else if (distribution_type == "Independent") {
-      # Independent samples for each level
-      runif(n_levels, 0, 100)
-    } else if (distribution_type == "Monotonic") {
-      # Two random points, uniform interpolation
-      bounds <- sort(runif(2, 0, 100))
-      seq(bounds[1], bounds[2], length.out = n_levels)
-    }
-  }
-
-  create_distribution_matrix <- function(state_levels, arm_levels, num_trials, num_arms,
-                                       state_dist_type, arm_dist_type) {
-    # Set random seed for reproducibility
-    set.seed(NULL)  # Reset seed to ensure independent sampling
-    
-    # Generate state distribution sequence
-    state_seq <- generate_sequence(state_levels, state_dist_type)
-    
-    # Generate arm distribution sequence
-    arm_seq <- generate_sequence(arm_levels, arm_dist_type)
-    
-    # Create distribution matrix
-    dist_matrix <- outer(state_seq, arm_seq, "+")
-    
-    # Normalize to 0-100 range
-    dist_matrix <- (dist_matrix - min(dist_matrix)) / (max(dist_matrix) - min(dist_matrix)) * 100
-    
-    return(dist_matrix)
-  }
-
-  summary_reward_distribution <- function() {
-    links <- link_data()
-    if (nrow(links) == 0) return(matrix(0, nrow = input$num_trials, ncol = input$num_arms))
-    
-    final_matrix <- matrix(0, nrow = input$num_trials, ncol = input$num_arms)
-    
-    for (i in 1:nrow(links)) {
-      # Get state variable info
-      state_var <- links$State_Variable[i]
-      state_info <- state_data()[state_data()$Name == state_var, ]
-      
-      # Get arm variable info
-      arm_var <- links$Arm_Variable[i]
-      arm_info <- arm_data()[arm_data()$Name == arm_var, ]
-      
-      # Create matrices
-      state_matrix <- create_variable_matrix(
-        state_info$Levels, 
-        state_info$Pattern, 
-        input$num_trials,
-        state_info$Levels  # Changed: use state_info$Levels instead of num_arms
-      )
-      
-      arm_matrix <- create_variable_matrix(
-        arm_info$Levels,
-        arm_info$Pattern,
-        input$num_arms,
-        arm_info$Levels
-      )
-      
-      # Create distribution matrix
-      dist_matrix <- create_distribution_matrix(
-        state_levels = state_info$Levels,
-        arm_levels = arm_info$Levels,
-        num_trials = input$num_trials,
-        num_arms = input$num_arms,
-        state_dist_type = links$State_Distribution[i],
-        arm_dist_type = links$Arm_Distribution[i]
-      )
-      
-      # Print matrix dimensions for debugging
-      cat("Dimensions:\n")
-      cat("State matrix:", dim(state_matrix), "\n")
-      cat("Distribution matrix:", dim(dist_matrix), "\n")
-      cat("Arm matrix:", dim(arm_matrix), "\n")
-      
-      # Matrix multiplication with dimension checks
-      # state_matrix: num_trials × state_levels
-      # dist_matrix: state_levels × arm_levels
-      # arm_matrix: arm_levels × num_arms
-      
-      # First multiplication
-      temp_matrix <- state_matrix %*% dist_matrix  # num_trials × arm_levels
-      # Second multiplication
-      pair_matrix <- temp_matrix %*% t(arm_matrix)  # num_trials × num_arms
-      
-      # Add to final matrix
-      final_matrix <- final_matrix + pair_matrix
-    }
-    
-    # Normalize to 0-100 range
-    if (max(final_matrix) != min(final_matrix)) {
-      final_matrix <- (final_matrix - min(final_matrix)) / (max(final_matrix) - min(final_matrix)) * 100
-    }
-    
-    return(final_matrix)
-  }
 }
 
-# Run App
+# Run App =====================================================================
+
 shinyApp(ui, server)
+
+
+#seed
+#乘法
+#储存
+#汇总
+#print?
+
+
+#bug
+#删除不了
+
+
+#标准化
+
+
+#顶部更新

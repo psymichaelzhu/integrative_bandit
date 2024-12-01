@@ -21,7 +21,6 @@ create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
       matrix[i, values[i]] <- 1
     }
   }
-  print(matrix)
   return(matrix)
 }
 
@@ -31,7 +30,7 @@ generate_sequence <- function(n_levels, distribution_type) {
   } else if (distribution_type == "Independent") {
     runif(n_levels, 0, 100)
   } else if (distribution_type == "Monotonic") {
-    bounds <- runif(2, 0, 100)
+    bounds <- sort(runif(2, 0, 100))
     seq(bounds[1], bounds[2], length.out = n_levels)
   }
 }
@@ -41,12 +40,10 @@ create_distribution_matrix <- function(state_levels, arm_levels, num_trials, num
   state_seq <- generate_sequence(state_levels, state_dist_type)
   arm_seq <- generate_sequence(arm_levels, arm_dist_type)
   dist_matrix <- outer(state_seq, arm_seq, "+")
-  if (max(dist_matrix) - min(dist_matrix) == 0) {
-    dist_matrix <- matrix(50, nrow = state_levels, ncol = arm_levels)
-  } else {
-    dist_matrix <- (dist_matrix - min(dist_matrix)) / (max(dist_matrix) - min(dist_matrix)) * 100
-  }
-  return(dist_matrix)
+  dist_matrix <- (dist_matrix - min(dist_matrix)) / (max(dist_matrix) - min(dist_matrix)) * 100
+  padded_matrix <- matrix(0, nrow = num_trials, ncol = num_arms)
+  padded_matrix[1:state_levels, 1:arm_levels] <- dist_matrix
+  return(padded_matrix)
 }
 
 summary_reward_distribution <- function(state_matrices, distribution_matrices, arm_matrices, 
@@ -65,11 +62,7 @@ summary_reward_distribution <- function(state_matrices, distribution_matrices, a
     final_matrix <- final_matrix + pair_matrix
   }
   
-  if (max(final_matrix) - min(final_matrix) == 0) {
-    final_matrix <- matrix(50, nrow = num_trials, ncol = num_arms)
-  } else {
-    final_matrix <- (final_matrix - min(final_matrix)) / (max(final_matrix) - min(final_matrix)) * 100
-  }
+  final_matrix <- (final_matrix - min(final_matrix)) / (max(final_matrix) - min(final_matrix)) * 100
   return(final_matrix)
 }
 
@@ -174,6 +167,7 @@ ui <- fluidPage(
   )
 )
 
+
 # Server ----------------------------------------------------------------
 server <- function(input, output, session) {
   # Reactive values to store matrices and data
@@ -192,14 +186,14 @@ server <- function(input, output, session) {
   # Initialize default state and arm data
   state_data <- reactiveVal(data.frame(
     Name = c("Overall", "Time"),
-    Levels = c(1, 10),
+    Levels = c(1, input$num_trials),
     Pattern = c("Loop", "Loop"),
     stringsAsFactors = FALSE
   ))
   
   arm_data <- reactiveVal(data.frame(
     Name = c("Index"),
-    Levels = c(5),
+    Levels = c(input$num_arms),
     Pattern = c("Loop"),
     stringsAsFactors = FALSE
   ))
@@ -370,7 +364,7 @@ server <- function(input, output, session) {
     ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
       geom_tile() +
       scale_fill_viridis_c(limits = c(0, 100)) +
-      theme_bruce() +
+      theme_minimal() +
       labs(x = "Trial", y = "Arm", fill = "Reward")
   })
 }

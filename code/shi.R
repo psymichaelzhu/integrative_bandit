@@ -183,16 +183,14 @@ create_distribution_matrix <- function(state_levels, arm_levels,
                                      interaction_type = "+") {
     
     if (interaction_type == "×") {
-        # For Random Walk × Independent case, generate matrix directly
+        # If interaction_type is "x", it means there is interaction: using arm_level as the seed, generate a sequence of state_dist_type.
         sapply(1:arm_levels, function(arm) {
             # Save current seed state
             old_seed <- .Random.seed
-            # Generate new seed based on arm index
             local_seed <- sample.int(.Machine$integer.max, 1) + arm
             set.seed(local_seed)
             print(local_seed)
-            # Generate random walk sequence
-            result <- generate_sequence(state_levels, "Random Walk")
+            result <- generate_sequence(state_levels, state_dist_type)
             
             # Restore original seed state
             .Random.seed <<- old_seed
@@ -786,6 +784,9 @@ shinyApp(ui, server)
 
 #保存
 
+#其他interaction
+
+#删除的bug
 
 #标准化
 #改名：Position和Trial

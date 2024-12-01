@@ -64,7 +64,7 @@ ui <- fluidPage(
                     style = "padding-right: 5px; width: 21%;"),
              column(3, 
                     selectInput("link_state_function", "State Distribution", 
-                              choices = c("Identical", "Independent", "Monotonic")),
+                              choices = c("Uniform", "Linear", "Asymmetric", "Correlation")),
                     style = "padding-right: 5px; width: 21%;"),
              column(1,
                     div(style = "margin-top: 25px; width: 100%; text-align: center;",
@@ -75,7 +75,7 @@ ui <- fluidPage(
                     style = "width: 8%;"),
              column(3, 
                     selectInput("link_arm_function", "Arm Distribution", 
-                              choices = c("Identical", "Independent", "Monotonic")),
+                              choices = c("Uniform", "Linear", "Asymmetric", "Correlation")),
                     style = "padding-left: 5px; width: 21%;"),
              column(2, 
                     selectInput("link_arm", "Arm Variable", choices = NULL),
@@ -105,27 +105,6 @@ ui <- fluidPage(
     )
   )
 )
-
-# Add this helper function before the server function
-create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
-  if (pattern == "Loop") {
-    # Create repeating sequence
-    values <- rep(1:levels, length.out = num_trials)
-    # Convert to one-hot encoding matrix
-    matrix <- matrix(0, nrow = num_trials, ncol = levels)
-    for (i in 1:num_trials) {
-      matrix[i, values[i]] <- 1
-    }
-  } else { # Random pattern
-    # Random assignment with equal probability
-    values <- sample(1:levels, num_trials, replace = TRUE)
-    matrix <- matrix(0, nrow = num_trials, ncol = levels)
-    for (i in 1:num_trials) {
-      matrix[i, values[i]] <- 1
-    }
-  }
-  return(matrix)
-}
 
 # Server
 server <- function(input, output, session) {
@@ -508,20 +487,13 @@ server <- function(input, output, session) {
   })
   
   # Reward Matrix Heatmap with seed control
-  reward_matrix <- reactiveVal(matrix(0, nrow = 10, ncol = 5))  # Default size
-
-  # Update the reward matrix when num_trials or num_arms changes
-  observe({
-    reward_matrix(matrix(0, nrow = input$num_trials, ncol = input$num_arms))
+  reward_matrix <- reactive({
+    # Instead of random values, create a matrix of zeros
+    matrix(0, 
+           nrow = input$num_trials, 
+           ncol = input$num_arms)
   })
-
-  # Modify the update demo button handler:
-  observeEvent(input$update_demo, {
-    new_matrix <- summary_reward_distribution()
-    reward_matrix(new_matrix)
-  })
-
-  # Modify the reward matrix plot to use the reactive value:
+  
   output$reward_matrix <- renderPlot({
     mat <- reward_matrix()
     heatmap_data <- data.frame(
@@ -532,7 +504,7 @@ server <- function(input, output, session) {
     
     ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
       geom_tile() +
-      scale_fill_viridis_c(limits = c(0, 100)) +
+      scale_fill_viridis_c(limits = c(0, 100)) +  # Set fixed scale limits
       theme_minimal() +
       labs(x = "Trial", y = "Arm", fill = "Reward") +
       theme_bruce()
@@ -575,14 +547,14 @@ server <- function(input, output, session) {
   
   # Add these helper functions at the server start
   generate_sequence <- function(n_levels, distribution_type) {
-    if (distribution_type == "Identical") {
-      # Single sample repeated for all levels
+    if (distribution_type == "Uniform") {
+      # All levels get the same random value
       rep(runif(1, 0, 100), n_levels)
     } else if (distribution_type == "Independent") {
-      # Independent samples for each level
+      # Each level gets independent random value
       runif(n_levels, 0, 100)
-    } else if (distribution_type == "Monotonic") {
-      # Two random points, uniform interpolation
+    } else if (distribution_type == "Linear") {
+      # Linear interpolation between two random points
       bounds <- sort(runif(2, 0, 100))
       seq(bounds[1], bounds[2], length.out = n_levels)
     }
@@ -590,90 +562,32 @@ server <- function(input, output, session) {
 
   create_distribution_matrix <- function(state_levels, arm_levels, num_trials, num_arms,
                                        state_dist_type, arm_dist_type) {
-    # Set random seed for reproducibility
-    set.seed(NULL)  # Reset seed to ensure independent sampling
+    # Create base matrix
+    mat <- matrix(0, nrow = num_trials, ncol = num_arms)
     
-    # Generate state distribution sequence
+    # Generate sequences
     state_seq <- generate_sequence(state_levels, state_dist_type)
-    
-    # Generate arm distribution sequence
     arm_seq <- generate_sequence(arm_levels, arm_dist_type)
     
-    # Create distribution matrix
-    dist_matrix <- outer(state_seq, arm_seq, "+")
-    
-    # Normalize to 0-100 range
-    dist_matrix <- (dist_matrix - min(dist_matrix)) / (max(dist_matrix) - min(dist_matrix)) * 100
-    
-    return(dist_matrix)
-  }
-
-  summary_reward_distribution <- function() {
-    links <- link_data()
-    if (nrow(links) == 0) return(matrix(0, nrow = input$num_trials, ncol = input$num_arms))
-    
-    final_matrix <- matrix(0, nrow = input$num_trials, ncol = input$num_arms)
-    
-    for (i in 1:nrow(links)) {
-      # Get state variable info
-      state_var <- links$State_Variable[i]
-      state_info <- state_data()[state_data()$Name == state_var, ]
-      
-      # Get arm variable info
-      arm_var <- links$Arm_Variable[i]
-      arm_info <- arm_data()[arm_data()$Name == arm_var, ]
-      
-      # Create matrices
-      state_matrix <- create_variable_matrix(
-        state_info$Levels, 
-        state_info$Pattern, 
-        input$num_trials,
-        state_info$Levels  # Changed: use state_info$Levels instead of num_arms
-      )
-      
-      arm_matrix <- create_variable_matrix(
-        arm_info$Levels,
-        arm_info$Pattern,
-        input$num_arms,
-        arm_info$Levels
-      )
-      
-      # Create distribution matrix
-      dist_matrix <- create_distribution_matrix(
-        state_levels = state_info$Levels,
-        arm_levels = arm_info$Levels,
-        num_trials = input$num_trials,
-        num_arms = input$num_arms,
-        state_dist_type = links$State_Distribution[i],
-        arm_dist_type = links$Arm_Distribution[i]
-      )
-      
-      # Print matrix dimensions for debugging
-      cat("Dimensions:\n")
-      cat("State matrix:", dim(state_matrix), "\n")
-      cat("Distribution matrix:", dim(dist_matrix), "\n")
-      cat("Arm matrix:", dim(arm_matrix), "\n")
-      
-      # Matrix multiplication with dimension checks
-      # state_matrix: num_trials × state_levels
-      # dist_matrix: state_levels × arm_levels
-      # arm_matrix: arm_levels × num_arms
-      
-      # First multiplication
-      temp_matrix <- state_matrix %*% dist_matrix  # num_trials × arm_levels
-      # Second multiplication
-      pair_matrix <- temp_matrix %*% t(arm_matrix)  # num_trials × num_arms
-      
-      # Add to final matrix
-      final_matrix <- final_matrix + pair_matrix
+    # Fill matrix (additive combination)
+    for (i in 1:state_levels) {
+      for (j in 1:arm_levels) {
+        mat[i, j] <- state_seq[i] + arm_seq[j]
+      }
     }
     
-    # Normalize to 0-100 range
-    if (max(final_matrix) != min(final_matrix)) {
-      final_matrix <- (final_matrix - min(final_matrix)) / (max(final_matrix) - min(final_matrix)) * 100
-    }
+    # Scale to 0-100 range
+    mat <- (mat - min(mat)) / (max(mat) - min(mat)) * 100
     
-    return(final_matrix)
+    # Print diagnostic information
+    cat("State levels:", state_levels, "\n")
+    cat("Arm levels:", arm_levels, "\n")
+    cat("State sequence:", state_seq, "\n")
+    cat("Arm sequence:", arm_seq, "\n")
+    cat("Distribution Matrix:\n")
+    print(mat)
+    
+    return(mat)
   }
 }
 

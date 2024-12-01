@@ -183,13 +183,18 @@ create_distribution_matrix <- function(state_levels, arm_levels,
                                      interaction_type = "+") {
     
     if (interaction_type == "×") {
-        # If interaction_type is "x", it means there is interaction: using arm_level as the seed, generate a sequence of state_dist_type.
+        # First generate arm sequence based on arm_dist_type
+        arm_seq <- generate_sequence(arm_levels, arm_dist_type)
+        
+        # Use each value in arm_seq as seed to generate state sequences
         sapply(1:arm_levels, function(arm) {
             # Save current seed state
             old_seed <- .Random.seed
-            local_seed <- sample.int(.Machine$integer.max, 1) + arm
+            
+            # Use arm sequence value as seed
+            local_seed <- round(arm_seq[arm])
             set.seed(local_seed)
-            print(local_seed)
+            
             result <- generate_sequence(state_levels, state_dist_type)
             
             # Restore original seed state
@@ -198,19 +203,11 @@ create_distribution_matrix <- function(state_levels, arm_levels,
             result
         })
     } else {
-        # For all other cases, use addition-based logic
-        state_seq <- generate_sequence(state_levels, state_dist_type)
+        # Generate arm sequence and repeat it for each state level
         arm_seq <- generate_sequence(arm_levels, arm_dist_type)
-        
-        dist_matrix <- outer(state_seq, arm_seq, "+")
-        
-        # Normalize to 0-100 range
-        range_diff <- max(dist_matrix) - min(dist_matrix)
-        if (range_diff == 0) {
-            dist_matrix[] <- 50
-        } else {
-            dist_matrix <- (dist_matrix - min(dist_matrix)) / range_diff * 100
-        }
+        dist_matrix <- matrix(rep(arm_seq, each = state_levels), 
+                            nrow = state_levels, 
+                            ncol = arm_levels)
         dist_matrix
     }
 }
@@ -812,3 +809,6 @@ shinyApp(ui, server)
 
 
 #log
+
+#随机性
+#多个矩阵的时候的随机处理

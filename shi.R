@@ -64,7 +64,7 @@ ui <- fluidPage(
                     style = "padding-right: 5px; width: 21%;"),
              column(3, 
                     selectInput("link_state_function", "State Distribution", 
-                              choices = c("Uniform", "Linear", "Asymmetric", "Correlation")),
+                              choices = c("Identical", "Independent", "Monotonic")),
                     style = "padding-right: 5px; width: 21%;"),
              column(1,
                     div(style = "margin-top: 25px; width: 100%; text-align: center;",
@@ -75,7 +75,7 @@ ui <- fluidPage(
                     style = "width: 8%;"),
              column(3, 
                     selectInput("link_arm_function", "Arm Distribution", 
-                              choices = c("Uniform", "Linear", "Asymmetric", "Correlation")),
+                              choices = c("Identical", "Independent", "Monotonic")),
                     style = "padding-left: 5px; width: 21%;"),
              column(2, 
                     selectInput("link_arm", "Arm Variable", choices = NULL),
@@ -575,14 +575,14 @@ server <- function(input, output, session) {
   
   # Add these helper functions at the server start
   generate_sequence <- function(n_levels, distribution_type) {
-    if (distribution_type == "Uniform") {
-      # All levels get the same random value
+    if (distribution_type == "Identical") {
+      # Single sample repeated for all levels
       rep(runif(1, 0, 100), n_levels)
     } else if (distribution_type == "Independent") {
-      # Each level gets independent random value
+      # Independent samples for each level
       runif(n_levels, 0, 100)
-    } else if (distribution_type == "Linear") {
-      # Linear interpolation between two random points
+    } else if (distribution_type == "Monotonic") {
+      # Two random points, uniform interpolation
       bounds <- sort(runif(2, 0, 100))
       seq(bounds[1], bounds[2], length.out = n_levels)
     }
@@ -590,45 +590,20 @@ server <- function(input, output, session) {
 
   create_distribution_matrix <- function(state_levels, arm_levels, num_trials, num_arms,
                                        state_dist_type, arm_dist_type) {
-    # Create base matrix
-    dist_matrix <- matrix(0, nrow = state_levels, ncol = arm_levels)
+    # Set random seed for reproducibility
+    set.seed(NULL)  # Reset seed to ensure independent sampling
     
-    # Fill matrix based on distribution types
-    for (i in 1:state_levels) {
-      for (j in 1:arm_levels) {
-        # Simple distribution patterns
-        if (state_dist_type == "Uniform") {
-          state_value <- 50  # Mid-point
-        } else if (state_dist_type == "Linear") {
-          state_value <- (i - 1) / (state_levels - 1) * 100
-        } else if (state_dist_type == "Asymmetric") {
-          state_value <- runif(1, 0, 100)
-        } else if (state_dist_type == "Correlation") {
-          state_value <- (i - 1) / (state_levels - 1) * 100
-        }
-        
-        if (arm_dist_type == "Uniform") {
-          arm_value <- 50  # Mid-point
-        } else if (arm_dist_type == "Linear") {
-          arm_value <- (j - 1) / (arm_levels - 1) * 100
-        } else if (arm_dist_type == "Asymmetric") {
-          arm_value <- runif(1, 0, 100)
-        } else if (arm_dist_type == "Correlation") {
-          arm_value <- (j - 1) / (arm_levels - 1) * 100
-        }
-        
-        dist_matrix[i, j] <- state_value + arm_value
-      }
-    }
+    # Generate state distribution sequence
+    state_seq <- generate_sequence(state_levels, state_dist_type)
     
-    # Scale to 0-100 range
+    # Generate arm distribution sequence
+    arm_seq <- generate_sequence(arm_levels, arm_dist_type)
+    
+    # Create distribution matrix
+    dist_matrix <- outer(state_seq, arm_seq, "+")
+    
+    # Normalize to 0-100 range
     dist_matrix <- (dist_matrix - min(dist_matrix)) / (max(dist_matrix) - min(dist_matrix)) * 100
-    
-    # Print diagnostic information
-    cat("State levels:", state_levels, "\n")
-    cat("Arm levels:", arm_levels, "\n")
-    cat("Distribution Matrix:\n")
-    print(dist_matrix)
     
     return(dist_matrix)
   }

@@ -127,6 +127,44 @@ create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
   return(matrix)
 }
 
+
+generate_variable_matrix <- function(variable_type, name, levels, allocation_mode, type_size, seed = NULL) {
+  # set seed
+  if (!is.null(seed)) set.seed(seed)
+  
+  # Create a zero square matrix of length `type_size `
+  # `type_size` is the number of trials/arms for state/arm variables.
+  mat <- matrix(0, nrow = type_size, ncol = type_size)
+  
+  # Determine the valid number of columns/rows (not exceeding the total size)
+  valid_size <- min(levels, type_size)
+  
+  # Allocation
+  switch(allocation_mode,
+       "Loop" = {
+         for (i in 1:type_size) {
+           row_idx <- ((i-1) %% valid_size) + 1
+           mat[row_idx, i] <- 1
+         }
+       },
+       "Random" = {
+         for (i in 1:type_size) {
+           row_idx <- sample(1:valid_size, 1)
+           mat[row_idx, i] <- 1
+         }
+       },
+       { # Default case
+         mat <- mat # Do nothing, keep matrix as zeros
+       }
+  )
+  # Print log
+  cat(sprintf("\nGenerated matrix for %s variable '%s':\n", variable_type, name))
+  print(mat)
+  
+  return(mat)
+}
+
+
 # Server
 server <- function(input, output, session) {
   # Update default rows when num_trials or num_arms changes

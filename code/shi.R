@@ -674,13 +674,14 @@ server <- function(input, output, session) {
       Arm = rep(1:ncol(mat), each = nrow(mat)),
       Value = as.vector(mat)
     )
-    
     ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
-      geom_tile() +
+      geom_tile(width = 1, height = 1) +
       scale_fill_viridis_c(limits = c(0, 100)) +
       theme_minimal() +
       labs(x = "Trial", y = "Arm", fill = "Reward") +
-      theme_bruce()
+      theme_bruce() +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0))
   })
   
   # Update Demo (renamed from Generate Demo)
@@ -724,8 +725,6 @@ server <- function(input, output, session) {
 shinyApp(ui, server)
 
 
-#刻度level:order还是普通categorical
-#Random 变成shuffle
 
 
 
@@ -738,42 +737,12 @@ shinyApp(ui, server)
 #改名：Position和Trial
 #Increasing 线性/对称 随机单边
 #shuffle: 几个
+#刻度level:order还是普通categorical
+#Random 变成shuffle
 
 
 #删除identical
 #删除overall
-
-
-
-multi-armed bandit
-shuffle(Position)
-
-structural bandit
-//order variable: close or not
-spatial: increasing(Position) random side
-spatial: randomwalk(Position) 
-conceptual: increasing(Brightness)
-conceptual: increasing(Number)
-//categorical variable: same or not
-conceptual: shuffle(Shape) //levels<num_trials
-
-BeanFest: not all variables are shuffled
-
-contextual bandit
-shuffle(Shape)|shuffle(Planet)
-//shuffle seed的逻辑是：首先以Planet生成sequence，然后shuffle shape level次
-//取保不同：所有组合
-
-
-restless bandit
-increasing(Time)|shuffle(Position)
-randomwalk(Time)|shuffle(Position)
-
-
-horizontal (information asymmetry): forced phase
-RUTU (uncertainty asymmetry): uncertainty 显示
-learning trap: feedback显示
-
 
 
 #实验程序

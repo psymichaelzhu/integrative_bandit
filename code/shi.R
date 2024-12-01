@@ -64,7 +64,7 @@ ui <- fluidPage(
                     style = "padding-right: 5px; width: 21%;"),
              column(3, 
                     selectInput("link_state_function", "State Distribution", 
-                              choices = c("Identical", "Independent", "Monotonic")),
+                              choices = c("Identical", "Independent", "Monotonic", "Random Walk")),
                     style = "padding-right: 5px; width: 21%;"),
              column(1,
                     div(style = "margin-top: 25px; width: 100%; text-align: center;",
@@ -75,7 +75,7 @@ ui <- fluidPage(
                     style = "width: 8%;"),
              column(3, 
                     selectInput("link_arm_function", "Arm Distribution", 
-                              choices = c("Identical", "Independent", "Monotonic")),
+                              choices = c("Identical", "Independent", "Monotonic", "Random Walk")),
                     style = "padding-left: 5px; width: 21%;"),
              column(2, 
                     selectInput("link_arm", "Arm Variable", choices = NULL),
@@ -136,17 +136,37 @@ create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
 
 # Sequence Generation
 generate_sequence <- function(n_levels, distribution_type) {
-  if (distribution_type == "Identical") {
-    # Single sample repeated for all levels
-    rep(runif(1, 0, 100), n_levels)
-  } else if (distribution_type == "Independent") {
-    # Independent samples for each level
-    runif(n_levels, 0, 100)
-  } else if (distribution_type == "Monotonic") {
-    # Two random points, uniform interpolation
-    bounds <- sort(runif(2, 0, 100))
-    seq(bounds[1], bounds[2], length.out = n_levels)
-  }
+  switch(distribution_type,
+    "Identical" = {
+      # Single sample repeated for all levels
+      rep(runif(1, 0, 100), n_levels)
+    },
+    "Independent" = {
+      # Independent samples for each level
+      runif(n_levels, 0, 100)
+    },
+    "Monotonic" = {
+      # Two random points, uniform interpolation
+      bounds <- sort(runif(2, 0, 100))
+      seq(bounds[1], bounds[2], length.out = n_levels)
+    },
+    "Random Walk" = {
+      # Start with a random value between 0-100
+      values <- numeric(n_levels)
+      values[1] <- runif(1, 20, 80)  # Start from middle range to allow room for walking
+      
+      # Generate random steps
+      for(i in 2:n_levels) {
+        # Generate a random step between -10 and 10
+        step <- runif(1, -10, 10)
+        # Calculate new value
+        new_value <- values[i-1] + step
+        # Ensure value stays within 0-100 bounds
+        values[i] <- min(max(new_value, 0), 100)
+      }
+      values
+    }
+  )
 }
 
 # Distribution Matrix Creation
@@ -161,8 +181,15 @@ create_distribution_matrix <- function(state_levels, arm_levels,
   # Create distribution matrix
   dist_matrix <- outer(state_seq, arm_seq, "+")
   
-  # Normalize to 0-100 range
-  dist_matrix <- (dist_matrix - min(dist_matrix)) / (max(dist_matrix) - min(dist_matrix)) * 100
+  # Safe normalization to 0-100 range
+  range_diff <- max(dist_matrix) - min(dist_matrix)
+  if (range_diff == 0) {
+    # If all values are the same, set to middle value (50)
+    dist_matrix[] <- 50
+  } else {
+    # Normal normalization when values differ
+    dist_matrix <- (dist_matrix - min(dist_matrix)) / range_diff * 100
+  }
   
   return(dist_matrix)
 }
@@ -219,9 +246,14 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
     final_matrix <- final_matrix + pair_matrix
   }
   
-  # Normalize to 0-100 range
-  if (max(final_matrix) != min(final_matrix)) {
-    final_matrix <- (final_matrix - min(final_matrix)) / (max(final_matrix) - min(final_matrix)) * 100
+  # Safe normalization to 0-100 range
+  range_diff <- max(final_matrix) - min(final_matrix)
+  if (range_diff == 0) {
+    # If all values are the same, set to middle value (50)
+    final_matrix[] <- 50
+  } else {
+    # Normal normalization when values differ
+    final_matrix <- (final_matrix - min(final_matrix)) / range_diff * 100
   }
   
   return(final_matrix)

@@ -333,13 +333,24 @@ server <- function(input, output, session) {
   
   # Initialize choices for link dropdowns
   observe({
+    # Get current selections
+    current_state <- input$link_state
+    current_arm <- input$link_arm
+    
+    # Get available choices
+    state_choices <- state_data()$Name
+    arm_choices <- arm_data()$Name
+    
+    # Update state dropdown, maintaining current selection if valid
     updateSelectInput(session, "link_state", 
-                     choices = state_data()$Name,
-                     selected = state_data()$Name[1])
+                     choices = state_choices,
+                     selected = if (current_state %in% state_choices) current_state else state_choices[1])
+    
+    # Update arm dropdown, maintaining current selection if valid
     updateSelectInput(session, "link_arm", 
-                     choices = arm_data()$Name,
-                     selected = arm_data()$Name[1])
-  }, priority = 1000)  # High priority to ensure it runs early
+                     choices = arm_choices,
+                     selected = if (current_arm %in% arm_choices) current_arm else arm_choices[1])
+  }, priority = 1000)
   
   # Initialize the default values to match input values
   observe({
@@ -754,4 +765,7 @@ shinyApp(ui, server)
 
 #Reactive
 
+
+#add之后的更新
+#断联结 自动time identical
 

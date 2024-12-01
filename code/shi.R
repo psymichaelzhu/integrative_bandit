@@ -33,7 +33,7 @@ ui <- fluidPage(
            fluidRow(
              column(3, textInput("state_name", "Name")),
              column(3, numericInput("state_levels", "# Levels", value = 1, min = 1)),
-             column(3, selectInput("state_pattern", "Pattern", choices = c("Loop", "Random"))),
+             column(3, selectInput("state_pattern", "Pattern", choices = c("Loop", "Shuffle", "Random"))),
              column(3, div(style = "margin-top: 25px;", 
                   actionButton("add_state", "Add", class = "btn-info")))
            ),
@@ -46,7 +46,7 @@ ui <- fluidPage(
            fluidRow(
              column(3, textInput("arm_name", "Name")),
              column(3, numericInput("arm_levels", "# Levels", value = 1, min = 1)),
-             column(3, selectInput("arm_pattern", "Pattern", choices = c("Loop", "Random"))),
+             column(3, selectInput("arm_pattern", "Pattern", choices = c("Loop", "Shuffle", "Random"))),
              column(3, div(style = "margin-top: 25px;",
                   actionButton("add_arm", "Add", class = "btn-info")))
            ),
@@ -110,21 +110,26 @@ ui <- fluidPage(
 
 # Matrix Creation
 create_variable_matrix <- function(levels, pattern, num_trials, num_arms) {
-  if (pattern == "Loop") {
-    # Create repeating sequence
-    values <- rep(1:levels, length.out = num_trials)
-    # Convert to one-hot encoding matrix
-    matrix <- matrix(0, nrow = num_trials, ncol = levels)
-    for (i in 1:num_trials) {
-      matrix[i, values[i]] <- 1
+  matrix <- matrix(0, nrow = num_trials, ncol = levels)
+  
+  values <- switch(pattern,
+    "Loop" = {
+      # Create repeating sequence
+      rep(1:levels, length.out = num_trials)
+    },
+    "Shuffle" = {
+      # First create a Loop pattern then shuffle
+      values <- rep(1:levels, length.out = num_trials)
+      sample(values, length(values), replace = FALSE)
+    },
+    "Random" = {
+      # Random assignment with equal probability 
+      sample(1:levels, num_trials, replace = TRUE)
     }
-  } else { # Random pattern
-    # Random assignment with equal probability
-    values <- sample(1:levels, num_trials, replace = TRUE)
-    matrix <- matrix(0, nrow = num_trials, ncol = levels)
-    for (i in 1:num_trials) {
-      matrix[i, values[i]] <- 1
-    }
+  )
+  # Convert to one-hot encoding matrix
+  for (i in 1:num_trials) {
+    matrix[i, values[i]] <- 1
   }
   return(matrix)
 }
@@ -687,11 +692,31 @@ server <- function(input, output, session) {
 shinyApp(ui, server)
 
 
-#储存
+
+
+#删除identical
+#添加randomwalk
+
+#刻度level:order还是普通categorical
+#混合和系数:base
+# 类型：线性/对称，random walk, shuffle； 单独的； conditional on; 种子
+#保存
 
 
 #标准化
+#改名：Position和Trial
+#Increasing
 
 
-#明确的刻度
-#种子 选择 乘法
+
+
+#实验程序
+#不确定性：显示
+
+
+# 组合图片 UI
+
+
+#Reactive
+
+

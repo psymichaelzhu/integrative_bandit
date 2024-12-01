@@ -321,9 +321,9 @@ server <- function(input, output, session) {
 
   # Initialize State and Arm Data with Default Rows
   state_data <- reactiveVal(data.frame(
-    Name = c("Overall", "Time"),
-    Levels = c(1, 10),  # Time will be updated by num_trials
-    Pattern = c("Loop", "Loop"),
+    Name = c("Time"),
+    Levels = c(10),  # Time will be updated by num_trials
+    Pattern = c("Loop"),
     stringsAsFactors = FALSE
   ))
   
@@ -576,19 +576,19 @@ server <- function(input, output, session) {
   # Remove State by Name with link cleanup
   observeEvent(input$remove_state_name, {
     name_to_remove <- input$remove_state_name
-    if (!is.null(name_to_remove) && !(name_to_remove %in% c("Overall", "Time"))) {  # Protect default rows
-      # First remove any links that reference this state
-      current_links <- link_data()
-      links_to_keep <- current_links$State_Variable != name_to_remove
-      link_data(current_links[links_to_keep, , drop = FALSE])
-      
-      # Then remove the state
-      current_data <- state_data()
-      current_data <- current_data[current_data$Name != name_to_remove, ]
-      state_data(current_data)
-      
-      # Update the state feature dropdown
-      updateSelectInput(session, "link_state", choices = state_data()$Name)
+    if (!is.null(name_to_remove) && name_to_remove != "Time") {  # Protect Time row only
+        # First remove any links that reference this state
+        current_links <- link_data()
+        links_to_keep <- current_links$State_Variable != name_to_remove
+        link_data(current_links[links_to_keep, , drop = FALSE])
+        
+        # Then remove the state
+        current_data <- state_data()
+        current_data <- current_data[current_data$Name != name_to_remove, ]
+        state_data(current_data)
+        
+        # Update the state feature dropdown
+        updateSelectInput(session, "link_state", choices = state_data()$Name)
     }
   })
   
@@ -632,7 +632,7 @@ server <- function(input, output, session) {
   output$state_table <- renderDT({
     df <- state_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
-      if (i <= 2) return("") # Default rows (Overall and Time)
+      if (i <= 1) return("") # Default row (Time)
       sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
               df$Name[i])
     })
@@ -659,7 +659,7 @@ server <- function(input, output, session) {
         initComplete = JS(
           "function(settings, json) {",
           "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",  # Set all rows to white first
-          "  $(this.api().rows([0,1]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default rows to gray
+          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default row to gray
           "}")
       )
     )
@@ -781,9 +781,7 @@ shinyApp(ui, server)
 
 #保存
 
-#其他interaction
 
-#删除的bug
 
 #标准化
 #改名：Position和Trial
@@ -796,19 +794,24 @@ shinyApp(ui, server)
 #删除overall
 
 
-#实验程序
-#不确定性：显示
 #其他部分的选择
 
 # 组合图片 UI
 
 
-#Reactive
 
 
+
+#实验程序
+#不确定性：显示
 
 
 #log
 
 #随机性
 #多个矩阵的时候的随机处理
+
+#删除的bug
+
+
+#Reactive

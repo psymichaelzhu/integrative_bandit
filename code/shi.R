@@ -451,19 +451,25 @@ server <- function(input, output, session) {
   
   # Add Link with interaction type
   observeEvent(input$add_link, {
+    # Create new link with current interaction state
+    current_interaction <- ifelse(input$link_distributions %% 2 == 1, "×", "+")
+    
     new_link <- data.frame(
       State_Variable = input$link_state,
       State_Distribution = input$link_state_function,
-      Interaction = ifelse(input$link_distributions %% 2 == 1, "×", "+"),  # Set interaction based on current state
+      Interaction = current_interaction,
       Arm_Distribution = input$link_arm_function,
       Arm_Variable = input$link_arm,
       stringsAsFactors = FALSE
     )
     
-    # Check for duplicate
+    # Check for duplicate considering interaction type
     current_data <- link_data()
-    duplicate_idx <- which(current_data$State_Variable == input$link_state & 
-                          current_data$Arm_Variable == input$link_arm)
+    duplicate_idx <- which(
+      current_data$State_Variable == input$link_state & 
+      current_data$Arm_Variable == input$link_arm &
+      current_data$Interaction == current_interaction  # Add interaction to duplicate check
+    )
     
     if (length(duplicate_idx) > 0) {
       # Replace existing row
@@ -506,8 +512,9 @@ server <- function(input, output, session) {
       )
     } else {
       df$Operation <- sapply(1:nrow(df), function(i) {
-        sprintf('<button onclick="Shiny.setInputValue(\'remove_link_key\', \'%s|%s\')" class="btn btn-danger btn-sm">Remove</button>', 
-                df$State_Variable[i], df$Arm_Variable[i])
+        # Include interaction type in the composite key
+        sprintf('<button onclick="Shiny.setInputValue(\'remove_link_key\', \'%s|%s|%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+                df$State_Variable[i], df$Arm_Variable[i], df$Interaction[i])
       })
     }
     
@@ -558,15 +565,17 @@ server <- function(input, output, session) {
   # Remove link by composite key (State_Variable|Arm_Variable)
   observeEvent(input$remove_link_key, {
     if (!is.null(input$remove_link_key)) {
-      # Split the composite key
+      # Split the composite key (now includes interaction)
       key_parts <- strsplit(input$remove_link_key, "\\|")[[1]]
       state_feature <- key_parts[1]
       arm_feature <- key_parts[2]
+      interaction_type <- key_parts[3]
       
-      # Remove the link
+      # Remove the link considering all three components
       current_links <- link_data()
       links_to_keep <- !(current_links$State_Variable == state_feature & 
-                        current_links$Arm_Variable == arm_feature)
+                        current_links$Arm_Variable == arm_feature &
+                        current_links$Interaction == interaction_type)
       
       # Update with remaining links
       link_data(current_links[links_to_keep, , drop = FALSE])
@@ -854,20 +863,13 @@ shinyApp(ui, server)
 
 
 
+#点击 查看
+
 
 #保存
 
 
 
-#标准化
-#改名：Position和Trial
-#Increasing 线性/对称 机单边
-#shuffle: 几个
-#刻度level:order还是普通categorical
-#Random 变成shuffle
-
-
-#删除overall
 
 
 #其他部分的选择
@@ -875,6 +877,15 @@ shinyApp(ui, server)
 # 组合图片 UI
 
 
+
+
+
+
+#改名：Position和Trial
+#Increasing 线性/对称 机单边
+#shuffle: 几个
+#刻度level:order还是普通categorical
+#Random 变成shuffle
 
 
 

@@ -743,23 +743,50 @@ server <- function(input, output, session) {
   # Save Configuration
   output$save_config <- downloadHandler(
     filename = function() {
-      paste("bandit_configuration_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv", sep = "")
+      paste("bandit_configuration_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".txt", sep = "")
     },
     content = function(file) {
-      # Prepare configuration data
-      config <- list(
-        state_variables = state_data(),
-        arm_variables = arm_data(),
-        link_matrix = link_data(),
-        parameters = list(
-          num_trials = input$num_trials,
-          num_arms = input$num_arms,
-          seed = input$seed
-        )
-      )
+      # Create text content
+      lines <- c()
       
-      # Save to file
-      saveRDS(config, file)
+      # Add parameters section
+      lines <- c(lines, 
+                "# Parameters",
+                paste("Num_Trials:", input$num_trials),
+                paste("Num_Arms:", input$num_arms),
+                paste("Seed:", input$seed),
+                "")
+      
+      # Add state variables section
+      lines <- c(lines,
+                "# State Variables",
+                paste(colnames(state_data()), collapse="\t"))
+      apply(state_data(), 1, function(row) {
+        lines <<- c(lines, paste(row, collapse="\t"))
+      })
+      lines <- c(lines, "")
+      
+      # Add arm variables section
+      lines <- c(lines,
+                "# Arm Variables",
+                paste(colnames(arm_data()), collapse="\t"))
+      apply(arm_data(), 1, function(row) {
+        lines <<- c(lines, paste(row, collapse="\t"))
+      })
+      lines <- c(lines, "")
+      
+      # Add link matrix section
+      lines <- c(lines,
+                "# Link Matrix",
+                paste(colnames(link_data()), collapse="\t"))
+      if (nrow(link_data()) > 0) {
+        apply(link_data(), 1, function(row) {
+          lines <<- c(lines, paste(row, collapse="\t"))
+        })
+      }
+      
+      # Write to file
+      writeLines(lines, file)
     }
   )
   
@@ -910,14 +937,6 @@ shinyApp(ui, server)
 
 
 
-#点击 查看
-
-
-#保存
-
-
-
-
 
 #其他部分的选择
 
@@ -933,7 +952,7 @@ shinyApp(ui, server)
 #shuffle: 几个
 #刻度level:order还是普通categorical
 #Random 变成shuffle
-
+#Pattern
 
 
 #实验程序

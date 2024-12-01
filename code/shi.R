@@ -145,7 +145,7 @@ generate_sequence <- function(n_levels, distribution_type) {
 }
 
 # Distribution Matrix Creation
-create_distribution_matrix <- function(state_levels, arm_levels, num_trials, num_arms,
+create_distribution_matrix <- function(state_levels, arm_levels, 
                                      state_dist_type, arm_dist_type) {
   # Generate state distribution sequence
   state_seq <- generate_sequence(state_levels, state_dist_type)
@@ -196,8 +196,6 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
     dist_matrix <- create_distribution_matrix(
       state_levels = state_info$Levels,
       arm_levels = arm_info$Levels,
-      num_trials = num_trials,
-      num_arms = num_arms,
       state_dist_type = links$State_Distribution[i],
       arm_dist_type = links$Arm_Distribution[i]
     )
@@ -413,8 +411,6 @@ server <- function(input, output, session) {
     dist_matrix <- create_distribution_matrix(
       state_levels = state_levels,
       arm_levels = arm_levels,
-      num_trials = input$num_trials,
-      num_arms = input$num_arms,
       state_dist_type = input$link_state_function,
       arm_dist_type = input$link_arm_function
     )
@@ -692,12 +688,6 @@ shinyApp(ui, server)
 
 
 #储存
-#汇总
-#print?
-
-
-#bug
-#删除不了
 
 
 #标准化

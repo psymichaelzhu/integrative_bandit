@@ -3,6 +3,7 @@
 <html>
 <head>
     <title> Integrative Bandit </title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
     <script src="js/jspsych.js"></script>
     <script src="js/plugin-html-keyboard-response.js"></script>
     <script src="js/plugin-image-keyboard-response.js"></script>
@@ -329,104 +330,156 @@ const images = shuffleArray([...unshuffledimages]);
 
 
 // 3. Reward generation --------------------------------------------------------------
+// Generate reward matrix based on varaible matrix and distribution link matrix
 
-// Generate base reward matrix from reward parameters
-function generateBaseMatrix() {
-    let baseMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        baseMatrix.push([...REWARD_PARAMETERS]); 
+// Generate sequences based on distribution type
+function generateSequence(levels, distributionType) {
+    switch(distributionType) {
+        case 'Identical':
+            const value = Math.random() * 100;
+            return Array(levels).fill(value);
+        
+        case 'Independent':
+            return Array(levels).fill().map(() => Math.random() * 100);
+        
+        case 'Monotonic':
+            const bounds = [Math.random() * 100, Math.random() * 100].sort((a, b) => a - b);
+            return Array.from({length: levels}, (_, i) => 
+                bounds[0] + (i / (levels - 1)) * (bounds[1] - bounds[0])
+            );
+        
+        case 'Random Walk':
+            const values = new Array(levels);
+            values[0] = 20 + Math.random() * 60; // Start between 20-80
+            
+            for(let i = 1; i < levels; i++) {
+                const step = (Math.random() * 20) - 10; // Step between -10 and +10
+                values[i] = Math.max(0, Math.min(100, values[i-1] + step));
+            }
+            return values;
     }
-    return baseMatrix;
-}
-// structural bandit
-// Generate context effect matrix based on context sequence
-function generateContextMatrix() {
-    // First create matrix matching context sequence shape
-    let contextMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        let row = [];
-        const contextIndex = CONTEXT_INDICES[i];
-        // For each arm, apply context-specific modifier
-        for (let j = 0; j < NUM_OPTIONS; j++) {
-            // Example context effect: +0.1 for first context, -0.1 for second context
-            const contextEffect = contextIndex === 0 ? 1 : 0;//修改mapping
-            //matrix
-            row.push(contextEffect);
-        }
-        contextMatrix.push(row);
-    }
-    return contextMatrix;
-}
-
-// Generate trial effect matrix
-function generateTrialMatrix() {
-    let trialMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        let row = [];
-        for (let j = 0; j < NUM_OPTIONS; j++) {
-            // Example trial effect: small linear decrease over time
-            const trialEffect = -0.001 * i;
-            row.push(trialEffect);
-        }
-        trialMatrix.push(row);
-    }
-    return trialMatrix;
 }
 
-//限制在0-1
-// Combine all matrices
-function combineMatrices() {
-    const base = generateBaseMatrix();
-    const context = generateContextMatrix();
-    const trial = generateTrialMatrix();
+// Create distribution matrix based on interaction type
+function createDistributionMatrix(stateVariable, armVariable, stateDistribution, armDistribution, interaction) {
+    const stateLevels = STATE_VARIABLES[stateVariable].levels;
+    const armLevels = ARM_VARIABLES[armVariable].levels;
     
-    let finalMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        let row = [];
-        for (let j = 0; j < NUM_OPTIONS; j++) {
-            // Combine effects and ensure probability stays between 0 and 1
-            const probability = Math.min(1, Math.max(0, 
-                base[i][j] + context[i][j] + trial[i][j]
-            ));
-            row.push(probability);
+    if (interaction === '×') {
+        // For multiplicative interaction, use arm values as seeds for state sequences
+        const armSeq = generateSequence(armLevels, armDistribution);
+        
+        return armSeq.map(armValue => {
+            Math.seedrandom(armValue.toString());
+            return generateSequence(stateLevels, stateDistribution);
+        });
+    } else {
+        // For additive interaction, just repeat arm sequence for each state
+        const armSeq = generateSequence(armLevels, armDistribution);
+        return Array(stateLevels).fill(armSeq);
+    }
+}
+
+// Generate reward matrix from all distribution links
+function generateRewardMatrix() {
+    // Initialize final matrix
+    let finalMatrix = Array(NUM_TRIALS).fill().map(() => 
+        Array(NUM_OPTIONS).fill(0)
+    );
+    
+    // Process each distribution link
+    DISTRIBUTION_LINKS.forEach(link => {
+        // Create distribution matrix
+        const distMatrix = createDistributionMatrix(
+            link.stateVariable,
+            link.armVariable,
+            link.stateDistribution,
+            link.armDistribution,
+            link.interaction
+        );
+        
+        // Create one-hot encoding matrices for state and arm variables
+        const stateMatrix = stateMatrices[link.stateVariable];
+        const armMatrix = armMatrices[link.armVariable];
+        
+        // Matrix multiplication: state * dist * arm^T
+        const tempMatrix = multiplyMatrices(stateMatrix, distMatrix);
+        const contributionMatrix = multiplyMatrices(tempMatrix, transposeMatrix(armMatrix));
+        
+        // Add contribution to final matrix
+        for(let i = 0; i < NUM_TRIALS; i++) {
+            for(let j = 0; j < NUM_OPTIONS; j++) {
+                finalMatrix[i][j] += contributionMatrix[i][j];
+            }
         }
-        finalMatrix.push(row);
+    });
+    
+    // Normalize to 0-100 range
+    const allValues = finalMatrix.flat();
+    const minVal = Math.min(...allValues);
+    const maxVal = Math.max(...allValues);
+    const range = maxVal - minVal;
+    
+    if (range === 0) {
+        return finalMatrix.map(row => row.map(() => 50));
+    } else {
+        return finalMatrix.map(row => 
+            row.map(val => ((val - minVal) / range) * 100)
+        );
     }
-    return finalMatrix;
 }
 
-const rewardProbabilityMatrix = combineMatrices();
+// Helper functions for matrix operations
+function multiplyMatrices(a, b) {
+    return a.map(row => 
+        transposeMatrix(b).map(col => 
+            row.reduce((sum, val, i) => sum + val * col[i], 0)
+        )
+    );
+}
 
-//根据矩阵生成对应数值
-// Generate Bernoulli rewards based on reward parameters
-function generateBernoulliRewards(reward_params) {
-    let rewardMatrix = [];
-    for (let i = 0; i < NUM_TRIALS+NUM_FORCED_TRIALS; i++) {
-        rewardMatrix.push(reward_params.map(probability => {
-            return jsPsych.randomization.sampleBernoulli(probability);
-        }));
-    }
-    return rewardMatrix;
+function transposeMatrix(matrix) {
+    return matrix[0].map((_, i) => matrix.map(row => row[i]));
 }
-function generateGaussianRewards(reward_params) {
-    let rewardMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        rewardMatrix.push(reward_params.map(probability => {
-            return jsPsych.randomization.sampleGaussian(probability * 100, 10);
-        }));
-    }
-    return rewardMatrix;
-}
-function generateReward_matrix(reward_params,reward_type) {
+
+// Generate final reward matrix
+const rewardMatrixRaw = generateRewardMatrix();
+
+function generateRewardMatrixActual(reward_params, reward_type) {
     if (reward_type === "gaussian") {
-        return generateGaussianRewards(reward_params);
+        // Generate Gaussian rewards based on raw matrix values as means
+        return rewardMatrixRaw.map(row => 
+            row.map(mean => {
+                const sd = reward_params.sd || 10; // Default SD if not specified
+                // Box-Muller transform to generate Gaussian noise
+                const u1 = Math.random();
+                const u2 = Math.random();
+                const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+                // Add noise to mean and clamp between 0 and 100
+                return Math.max(0, Math.min(100, mean + z * sd));
+            })
+        );
     } else if (reward_type === "bernoulli") {
-        return generateBernoulliRewards(reward_params);
+        // Generate binary rewards based on raw matrix values as probabilities
+        return rewardMatrixRaw.map(row =>
+            row.map(prob => {
+                // Scale probability from 0-100 to 0-1
+                const scaledProb = prob / 100;
+                // Generate binary outcome based on probability
+                return Math.random() < scaledProb ? 100 : 0;
+            })
+        );
     }
+    
+    // Default fallback to raw matrix if type is not recognized
+    return rewardMatrixRaw;
 }
-const allRewards = generateReward_matrix(REWARD_PARAMETERS, REWARD_TYPE);
 
+const allRewards = generateRewardMatrixActual(REWARD_PARAMETERS, REWARD_TYPE);
 
+console.log('Distribution Matrix:', distMatrix);
+console.log('Contribution Matrix:', contributionMatrix);
+console.log('Final Matrix:', finalMatrix);
 
 // 4. UI creation --------------------------------------------------------------
 function createForcedChoiceTrial(trialIndex, forcedChoice) {

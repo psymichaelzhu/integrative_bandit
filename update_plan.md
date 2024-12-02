@@ -41,3 +41,9 @@ NUM_OPTIONS
 图片的配置文件
 
 INSTRUCTION
+
+不确定性
+
+
+调整
+

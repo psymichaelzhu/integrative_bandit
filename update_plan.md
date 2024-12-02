@@ -50,3 +50,8 @@ INSTRUCTION
 
 
 image_indices
+
+
+forced choice
+
+uncertainty

@@ -10,6 +10,5 @@ const IMAGE_INDICES = [
     [1,3],
     [1,4]
 ];
-const NUM_CONTEXTS = 1;
 const NUM_FORCED_TRIALS = 0;
 const FORCED_CHOICE_SEQUENCE = [0, 1, 0];

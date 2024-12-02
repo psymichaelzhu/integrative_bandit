@@ -441,7 +441,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
             const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
             return `
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                    <img src='${IMG_CONTEXT[trialIndex]}' 
                          style='max-width: 150px;'></img>
                     <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
@@ -450,7 +450,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_OPTIONS).fill().map((_, i) => `
                     <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
-                        <img src='${images[i]}' style='width: 100%;'></img>
+                        <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
                         <p class='small'><strong>Press key ${i+1}</strong></p>
                     </div>
                 `).join('')}
@@ -510,7 +510,7 @@ function createTrial(trialIndex) {
             const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
             return `
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                    <img src='${IMG_CONTEXT[trialIndex]}' 
                          style='max-width: 150px;'></img>
                     <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
@@ -519,7 +519,7 @@ function createTrial(trialIndex) {
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_OPTIONS).fill().map((_, i) => `
                     <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
-                        <img src='${images[i]}' style='width: 100%;'></img>
+                        <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
                         <p class='small'><strong>Press key ${i+1}</strong></p>
                     </div>
                 `).join('')}
@@ -556,14 +556,14 @@ function createFeedback(trialIndex) {
             return `
                 <div>
                     <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                        <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                        <img src='${IMG_CONTEXT[trialIndex]}' 
                              style='max-width: 150px;'></img>
                         <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
                         <p>Current Total Aetherium: ${lastTrial.total_reward}</p>
                         <p>Remaining Days: ${remainingTrials-1}</p>
                     </div>
                     <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
-                        ${images.map((img, index) => {
+                        ${IMG_ARM.map((img, index) => {
                             const isSelected = index === choice;
                             const reward = allRewards[trialIndex][index];
                             const showReward = FEEDBACK_VERSION=="full" || isSelected;
@@ -600,7 +600,7 @@ function createFeedback(trialIndex) {
     };
 }
 // Rating for each arm
-const probabilityRatings = images.map((image, index) => {
+const probabilityRatings = IMG_ARM.map((image, index) => {
     return {
         type: jsPsychHtmlSliderResponse,
         stimulus: `

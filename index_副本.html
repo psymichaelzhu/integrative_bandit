@@ -16,10 +16,97 @@
 </body>
 <script>
 
-// variables are loaded from MAB.js
+// Define experiment parameters
+//basic parameters
+var NUM_TRIALS = experiment_setup["NUM_TRIALS"];
+var NUM_OPTIONS = experiment_setup["NUM_OPTIONS"];
+const NUM_CONTEXTS = experiment_setup["NUM_CONTEXTS"];
+const REWARD_PARAMETERS = experiment_setup["REWARD_PARAMETERS"];
+const REWARD_TYPE = experiment_setup["REWARD_TYPE"];
+//version parameters
+const SOCIAL_VERSION = experiment_setup["SOCIAL_VERSION"]; 
+const FEEDBACK_VERSION = experiment_setup["FEEDBACK_VERSION"];
+//image parameters
+const IMAGE_INDICES = experiment_setup["IMAGE_INDICES"];
+//taylored parameters for specific paradigms
+const NAME = experiment_setup["NAME"];
+const NUM_FORCED_TRIALS = experiment_setup["NUM_FORCED_TRIALS"];
+const FORCED_CHOICE_SEQUENCE = experiment_setup["FORCED_CHOICE_SEQUENCE"];
 
 
-// 1. Stimuli generation --------------------------------------------------------------
+
+
+// Initialize
+const jsPsych = initJsPsych({
+    on_finish: function() {
+        // Get all data and ignore multiple columns
+        var all_data = jsPsych.data.get()
+            .ignore([
+            'stimulus',
+            'trial_type',
+            'internal_node_id',
+            'view_history',
+            'time_elapsed',
+            'response_label',
+            'slider_start',
+            'success',
+            'trial_index',
+            'plugin_version',
+            'total_reward'
+        ])
+        .filter([{tag: 'trial'}, {tag: 'rating'}]);
+
+        // Download CSV file
+        const filename = `bandit_data_${Date.now()}.csv`;
+        all_data.localSave('csv', filename);
+        
+        // Also log to console for debugging
+        console.log(all_data.csv());
+    },
+    show_progress_bar: true
+});
+const enterFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: true,
+    message: '<p>The experiment will start in fullscreen mode.</p><p>Click the button below to enter fullscreen mode.</p>',
+    button_label: 'Enter Fullscreen',
+    data: {
+        tag: 'enter_fullscreen'
+    }
+};
+const exitFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: false,
+    data: {
+        tag: 'exit_fullscreen'
+    }
+};
+const welcome = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<h1>Welcome to the ${NAME}</h1><p>[Press any key to continue]</p>`,
+    data: {
+        tag: 'welcome'
+    } 
+};
+const debrief = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const totalReward = jsPsych.data.get().select('reward').sum();
+        return `
+            <h2>Experiment finished</h2>
+            <p>Your total score: ${totalReward}</p>
+            <p>Your total payoff: ${totalReward*0.01} \$</p>
+            <p>Thank you for your participation!</p>
+            <p>[Press any key to exit]</p>
+        `;
+    },
+    data: {
+        tag: 'debrief'
+    }
+};
+
+
+//utilities
 //load images (context and arm)
 function generateImagePath(imageType, shapeColorPair) {
     const [shape, color] = shapeColorPair;
@@ -118,7 +205,7 @@ const instructions = {
     }
 };
 
-// 2. Reward generation --------------------------------------------------------------
+//reward
 
 // Generate base reward matrix from reward parameters
 function generateBaseMatrix() {
@@ -216,9 +303,12 @@ function generateReward_matrix(reward_params,reward_type) {
 }
 const allRewards = generateReward_matrix(REWARD_PARAMETERS, REWARD_TYPE);
 
+//reward as function: context, arm, trial
+//depend on reward_type
 
-
-// 3. UI creation --------------------------------------------------------------
+//flow creation
+//forced choice phase
+// Forced choice trial
 function createForcedChoiceTrial(trialIndex, forcedChoice) {
     return {
         type: jsPsychHtmlKeyboardResponse,
@@ -415,77 +505,9 @@ const probabilityRatings = images.map((image, index) => {
 });
 
 
-// 4. Experiment basic setup --------------------------------------------------------------
-const jsPsych = initJsPsych({
-    on_finish: function() {
-        // Get all data and ignore multiple columns
-        var all_data = jsPsych.data.get()
-            .ignore([
-            'stimulus',
-            'trial_type',
-            'internal_node_id',
-            'view_history',
-            'time_elapsed',
-            'response_label',
-            'slider_start',
-            'success',
-            'trial_index',
-            'plugin_version',
-            'total_reward'
-        ])
-        .filter([{tag: 'trial'}, {tag: 'rating'}]);
-
-        // Download CSV file
-        const filename = `bandit_data_${Date.now()}.csv`;
-        all_data.localSave('csv', filename);
-        
-        // Also log to console for debugging
-        console.log(all_data.csv());
-    },
-    show_progress_bar: true
-});
-const enterFullscreen = {
-    type: jsPsychFullscreen,
-    fullscreen_mode: true,
-    message: '<p>The experiment will start in fullscreen mode.</p><p>Click the button below to enter fullscreen mode.</p>',
-    button_label: 'Enter Fullscreen',
-    data: {
-        tag: 'enter_fullscreen'
-    }
-};
-const exitFullscreen = {
-    type: jsPsychFullscreen,
-    fullscreen_mode: false,
-    data: {
-        tag: 'exit_fullscreen'
-    }
-};
-const welcome = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: `<h1>Welcome to the ${NAME}</h1><p>[Press any key to continue]</p>`,
-    data: {
-        tag: 'welcome'
-    } 
-};
-const debrief = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const totalReward = jsPsych.data.get().select('reward').sum();
-        return `
-            <h2>Experiment finished</h2>
-            <p>Your total score: ${totalReward}</p>
-            <p>Your total payoff: ${totalReward*0.01} \$</p>
-            <p>Thank you for your participation!</p>
-            <p>[Press any key to exit]</p>
-        `;
-    },
-    data: {
-        tag: 'debrief'
-    }
-};
 
 
-// 5. Timeline --------------------------------------------------------------
+// Timeline
 let timeline = [enterFullscreen, welcome, instructions];
 // Forced phase
 for (let i = 0; i < NUM_FORCED_TRIALS; i++) {
@@ -513,6 +535,16 @@ probabilityRatings.forEach(rating => {
 timeline.push(debrief);
 timeline.push(exitFullscreen);
 
+
+
+// Run experiment
 jsPsych.run(timeline);
+//文字复用
+//自定义
+//随机化
+//图像选择界面
+//reward generation
+//保存数据
+//服务器
 </script>
 </html>

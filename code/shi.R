@@ -743,46 +743,72 @@ server <- function(input, output, session) {
   # Save Configuration
   output$save_config <- downloadHandler(
     filename = function() {
-      paste("bandit_configuration_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".txt", sep = "")
+      paste("Bandit_config_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".js", sep = "")
     },
     content = function(file) {
-      # Create text content
+      # Create JavaScript content
       lines <- c()
       
       # Add parameters section
-      lines <- c(lines, 
-                "# Parameters",
-                paste("Num_Trials:", input$num_trials),
-                paste("Num_Arms:", input$num_arms),
-                paste("Seed:", input$seed),
+      lines <- c(lines,
+                "// Basic Parameters",
+                paste0("const NUM_TRIALS = ", input$num_trials, ";"),
+                paste0("const NUM_ARMS = ", input$num_arms, ";"),
+                paste0("const RANDOM_SEED = ", input$seed, ";"),
                 "")
       
       # Add state variables section
+      state_df <- state_data()
       lines <- c(lines,
-                "# State Variables",
-                paste(colnames(state_data()), collapse="\t"))
-      apply(state_data(), 1, function(row) {
-        lines <<- c(lines, paste(row, collapse="\t"))
+                "// State Variables",
+                "const STATE_VARIABLES = {")
+      
+      # Convert each state variable row to an object
+      state_lines <- apply(state_df, 1, function(row) {
+        paste0("  ", row["Name"], ": {",
+              "levels: ", row["Levels"], ", ",
+              "pattern: '", row["Pattern"], "'",
+              "}")
       })
-      lines <- c(lines, "")
+      lines <- c(lines, paste0(paste(state_lines, collapse = ",\n"), "\n};"), "")
       
       # Add arm variables section
+      arm_df <- arm_data()
       lines <- c(lines,
-                "# Arm Variables",
-                paste(colnames(arm_data()), collapse="\t"))
-      apply(arm_data(), 1, function(row) {
-        lines <<- c(lines, paste(row, collapse="\t"))
+                "// Arm Variables",
+                "const ARM_VARIABLES = {")
+      
+      # Convert each arm variable row to an object
+      arm_lines <- apply(arm_df, 1, function(row) {
+        paste0("  ", row["Name"], ": {",
+              "levels: ", row["Levels"], ", ",
+              "pattern: '", row["Pattern"], "'",
+              "}")
       })
-      lines <- c(lines, "")
+      lines <- c(lines, paste0(paste(arm_lines, collapse = ",\n"), "\n};"), "")
       
       # Add link matrix section
-      lines <- c(lines,
-                "# Link Matrix",
-                paste(colnames(link_data()), collapse="\t"))
-      if (nrow(link_data()) > 0) {
-        apply(link_data(), 1, function(row) {
-          lines <<- c(lines, paste(row, collapse="\t"))
+      link_df <- link_data()
+      if (nrow(link_df) > 0) {
+        lines <- c(lines,
+                  "// Distribution Links",
+                  "const DISTRIBUTION_LINKS = [")
+        
+        # Convert each link row to an object
+        link_lines <- apply(link_df, 1, function(row) {
+          paste0("  {",
+                "stateVariable: '", row["State_Variable"], "', ",
+                "stateDistribution: '", row["State_Distribution"], "', ",
+                "interaction: '", row["Interaction"], "', ",
+                "armDistribution: '", row["Arm_Distribution"], "', ",
+                "armVariable: '", row["Arm_Variable"], "'",
+                "}")
         })
+        lines <- c(lines, paste0(paste(link_lines, collapse = ",\n"), "\n];"))
+      } else {
+        lines <- c(lines,
+                  "// Distribution Links",
+                  "const DISTRIBUTION_LINKS = [];")
       }
       
       # Write to file

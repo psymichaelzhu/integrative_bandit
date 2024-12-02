@@ -935,13 +935,16 @@ server <- function(input, output, session) {
 shinyApp(ui, server)
 
 
+#json
+
+#实验程序
+#不确定性：显示
 
 
 
 #其他部分的选择
 
 # 组合图片 UI
-
 
 
 
@@ -955,11 +958,9 @@ shinyApp(ui, server)
 #Pattern
 
 
-#实验程序
-#不确定性：显示
 
+# 整理程序
 
-#log
 
 #随机性
 #多个矩阵的时候的随机处理
@@ -968,6 +969,4 @@ shinyApp(ui, server)
 
 
 #Reactive
-
-
 #cost

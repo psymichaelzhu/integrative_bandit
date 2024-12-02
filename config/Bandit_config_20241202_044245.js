@@ -19,5 +19,5 @@ const ARM_VARIABLES = {
 // Distribution Links
 const DISTRIBUTION_LINKS = [
   {stateVariable: 'Time', stateDistribution: 'Identical', interaction: '+', armDistribution: 'Independent', armVariable: 'Index'},
-  {stateVariable: 'Time', stateDistribution: 'Random Walk', interaction: '×', armDistribution: 'Independent', armVariable: 'Index'}
+  {stateVariable: 'Time', stateDistribution: 'Monotonic', interaction: '×', armDistribution: 'Independent', armVariable: 'Index'}
 ];

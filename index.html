@@ -365,19 +365,33 @@ function createDistributionMatrix(stateVariable, armVariable, stateDistribution,
     const stateLevels = STATE_VARIABLES[stateVariable].levels;
     const armLevels = ARM_VARIABLES[armVariable].levels;
     
+    // Initialize matrix with correct dimensions (stateLevels × armLevels)
+    let distributionMatrix = Array(stateLevels).fill().map(() => 
+        Array(armLevels).fill(0)
+    );
+    
     if (interaction === '×') {
-        // For multiplicative interaction, use arm values as seeds for state sequences
+        // For multiplicative interaction
         const armSeq = generateSequence(armLevels, armDistribution);
         
-        return armSeq.map(armValue => {
-            Math.seedrandom(armValue.toString());
-            return generateSequence(stateLevels, stateDistribution);
-        });
+        // Generate state sequences for each arm value
+        for (let stateIndex = 0; stateIndex < stateLevels; stateIndex++) {
+            for (let armIndex = 0; armIndex < armLevels; armIndex++) {
+                Math.seedrandom(armSeq[armIndex].toString());
+                const stateSeq = generateSequence(stateLevels, stateDistribution);
+                distributionMatrix[stateIndex][armIndex] = stateSeq[stateIndex];
+            }
+        }
     } else {
-        // For additive interaction, just repeat arm sequence for each state
+        // For additive interaction
         const armSeq = generateSequence(armLevels, armDistribution);
-        return Array(stateLevels).fill(armSeq);
+        // Fill matrix - repeat arm sequence for each state
+        for (let stateIndex = 0; stateIndex < stateLevels; stateIndex++) {
+            distributionMatrix[stateIndex] = [...armSeq];
+        }
     }
+    
+    return distributionMatrix;
 }
 
 // Generate reward matrix from all distribution links
@@ -397,14 +411,17 @@ function generateRewardMatrix() {
             link.armDistribution,
             link.interaction
         );
+        console.log('Distribution Matrix:', distMatrix);
         
         // Create one-hot encoding matrices for state and arm variables
         const stateMatrix = stateMatrices[link.stateVariable];
         const armMatrix = armMatrices[link.armVariable];
-        
+        console.log('State Matrix:', stateMatrix);
+        console.log('Arm Matrix:', armMatrix);
         // Matrix multiplication: state * dist * arm^T
         const tempMatrix = multiplyMatrices(stateMatrix, distMatrix);
         const contributionMatrix = multiplyMatrices(tempMatrix, transposeMatrix(armMatrix));
+        console.log('Contribution Matrix:', contributionMatrix);
         
         // Add contribution to final matrix
         for(let i = 0; i < NUM_TRIALS; i++) {
@@ -419,14 +436,21 @@ function generateRewardMatrix() {
     const minVal = Math.min(...allValues);
     const maxVal = Math.max(...allValues);
     const range = maxVal - minVal;
+
+
     
+
+    let standardizedMatrix;
     if (range === 0) {
-        return finalMatrix.map(row => row.map(() => 50));
+        standardizedMatrix = finalMatrix.map(row => row.map(() => 50));
     } else {
-        return finalMatrix.map(row => 
+        standardizedMatrix = finalMatrix.map(row => 
             row.map(val => ((val - minVal) / range) * 100)
         );
     }
+    console.log('Standardized Matrix:', standardizedMatrix);
+    return standardizedMatrix;
+    
 }
 
 // Helper functions for matrix operations
@@ -444,42 +468,44 @@ function transposeMatrix(matrix) {
 
 // Generate final reward matrix
 const rewardMatrixRaw = generateRewardMatrix();
+console.log('Reward Matrix Raw:', rewardMatrixRaw);
 
-function generateRewardMatrixActual(reward_params, reward_type) {
-    if (reward_type === "gaussian") {
-        // Generate Gaussian rewards based on raw matrix values as means
-        return rewardMatrixRaw.map(row => 
-            row.map(mean => {
-                const sd = reward_params.sd || 10; // Default SD if not specified
-                // Box-Muller transform to generate Gaussian noise
-                const u1 = Math.random();
-                const u2 = Math.random();
-                const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-                // Add noise to mean and clamp between 0 and 100
-                return Math.max(0, Math.min(100, mean + z * sd));
-            })
-        );
-    } else if (reward_type === "bernoulli") {
-        // Generate binary rewards based on raw matrix values as probabilities
-        return rewardMatrixRaw.map(row =>
-            row.map(prob => {
-                // Scale probability from 0-100 to 0-1
-                const scaledProb = prob / 100;
-                // Generate binary outcome based on probability
-                return Math.random() < scaledProb ? 100 : 0;
-            })
-        );
+function generateRewardMatrixActual(rewardMatrixRaw, rewardType) {
+    // Helper function for generating truncated Gaussian values
+    function generateTruncatedGaussian(mean, sd) {
+        while (true) {
+            // Box-Muller transform
+            const u1 = Math.random();
+            const u2 = Math.random();
+            const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+            const value = mean + z * sd;
+            
+            // Only return if within [0, 100] bounds
+            if (value >= 0 && value <= 100) {
+                return Math.round(value);
+            }
+        }
     }
-    
-    // Default fallback to raw matrix if type is not recognized
-    return rewardMatrixRaw;
+
+    return rewardMatrixRaw.map(row => 
+        row.map(value => {
+            if (rewardType === 'binary') {
+                // Bernoulli distribution with p = value/100
+                return Math.random() < (value / 100) ? 1 : 0;
+            } else if (rewardType === 'numeric') {
+                // Truncated Gaussian with mean = value, sd = 5
+                return generateTruncatedGaussian(value, 5);
+            } else {
+                console.warn('Unknown reward type, returning raw value');
+                return value;
+            }
+        })
+    );
 }
 
-const allRewards = generateRewardMatrixActual(REWARD_PARAMETERS, REWARD_TYPE);
+const allRewards = generateRewardMatrixActual(rewardMatrixRaw, REWARD_TYPE);
+console.log('All Rewards:', allRewards);
 
-console.log('Distribution Matrix:', distMatrix);
-console.log('Contribution Matrix:', contributionMatrix);
-console.log('Final Matrix:', finalMatrix);
 
 // 4. UI creation --------------------------------------------------------------
 function createForcedChoiceTrial(trialIndex, forcedChoice) {

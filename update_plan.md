@@ -47,3 +47,6 @@ INSTRUCTION
 
 调整
 
+
+
+image_indices

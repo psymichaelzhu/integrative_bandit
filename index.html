@@ -21,6 +21,20 @@
 // basic information are loaded from MAB.js
 // variables are loaded from Bandit_config.js
 
+
+const NAME_PLANET = [
+  "Nova",
+  "Solis",
+  "Aether",
+  "Zephyr",
+  "Lumis",
+  "Orion",
+  "Astra",
+  "Vora",
+  "Kryos",
+  "Pyra"
+];
+
 // Check if Planet, Color and Shape exist in STATE_VARIABLES and ARM_VARIABLES, if not create them (To ensure the loading success)
 if (!STATE_VARIABLES.Planet) {
     STATE_VARIABLES.Planet = {levels: 1, pattern: 'Loop'};
@@ -211,8 +225,37 @@ console.log(stateMatrices);
 const armMatrices = createVariableMatrices(ARM_VARIABLES, NUM_TRIALS, NUM_ARMS, false);     // Arm variables
 console.log(armMatrices);
 
-// Generate context image sequence based on Planet matrix
-function generateContextImageSequence(stateMatrices) {
+
+// Generate arm image sequence based on Color and Shape matrix
+function generateArmImageSequence(armMatrices, socialVersion) {
+  // Get Color and Shape matrices
+  const colorMatrix = armMatrices.Color;
+  const shapeMatrix = armMatrices.Shape;
+  
+  if (!colorMatrix || !shapeMatrix) {
+      console.error("Color or Shape matrix not found in armMatrices");
+      return [];
+  }
+
+  // Convert one-hot encoding to indices for each arm
+  const armSequence = colorMatrix.map((colorRow, armIndex) => {
+      // Get color index (1-based)
+      const colorIndex = colorRow.indexOf(1) + 1;
+      // Get shape index (1-based)
+      const shapeIndex = shapeMatrix[armIndex].indexOf(1) + 1;
+      
+      // Generate image path based on social version
+      const folder = socialVersion === 'social' ? 'social' : 'nonsocial';
+      return `img/${folder}/arm/${shapeIndex}-${colorIndex}.png`;
+  });
+
+  return armSequence;
+}
+const IMG_ARM = generateArmImageSequence(armMatrices, SOCIAL_VERSION);
+console.log(IMG_ARM);
+
+// Generate context ID sequence from Planet matrix
+function generateContextIDSequence(stateMatrices) {
     // Get Planet matrix
     const planetMatrix = stateMatrices.Planet;
     if (!planetMatrix) {
@@ -220,125 +263,22 @@ function generateContextImageSequence(stateMatrices) {
         return [];
     }
 
-    // Convert one-hot encoding to planet indices
-    const contextSequence = planetMatrix.map(trial => {
-        // Find the index of 1 in the trial array (convert to 1-based index)
-        const planetIndex = trial.indexOf(1) + 1;
-        // Generate image path
-        return `img/Planet/${planetIndex}.png`;
-    });
-
+    // Convert one-hot encoding to planet indices (1-based)
+    const contextSequence = planetMatrix.map(trial => trial.indexOf(1) + 1);
     return contextSequence;
 }
-const IMG_CONTEXT = generateContextImageSequence(stateMatrices);
-const NAME_PLANET = [
-  "Nova",
-  "Solis",
-  "Aether",
-  "Zephyr",
-  "Lumis",
-  "Orion",
-  "Astra",
-  "Vora",
-  "Kryos",
-  "Pyra"
-];
-const NAME_CONTEXT = IMG_CONTEXT.map((_, index) => NAME_PLANET[index]);
+
+// Generate context image paths from context IDs
+function generateContextImagePaths(contextIDs) {
+    return contextIDs.map(id => `img/Planet/${id}.png`);
+}
+
+const ID_CONTEXT = generateContextIDSequence(stateMatrices);
+const IMG_CONTEXT = generateContextImagePaths(ID_CONTEXT);
+const NAME_CONTEXT = ID_CONTEXT.map(id => NAME_PLANET[id - 1]);
 console.log(NAME_CONTEXT);
 console.log(IMG_CONTEXT);
 
-
-const contextNames = [
-  "Nova",
-  "Solis",
-  "Aether",
-  "Zephyr",
-  "Lumis",
-  "Orion",
-  "Astra",
-  "Vora",
-  "Kryos",
-  "Pyra"
-];
-
-
-// Generate arm image sequence based on Color and Shape matrix
-function generateArmImageSequence(armMatrices, socialVersion) {
-    // Get Color and Shape matrices
-    const colorMatrix = armMatrices.Color;
-    const shapeMatrix = armMatrices.Shape;
-    
-    if (!colorMatrix || !shapeMatrix) {
-        console.error("Color or Shape matrix not found in armMatrices");
-        return [];
-    }
-
-    // Convert one-hot encoding to indices for each arm
-    const armSequence = colorMatrix.map((colorRow, armIndex) => {
-        // Get color index (1-based)
-        const colorIndex = colorRow.indexOf(1) + 1;
-        // Get shape index (1-based)
-        const shapeIndex = shapeMatrix[armIndex].indexOf(1) + 1;
-        
-        // Generate image path based on social version
-        const folder = socialVersion === 'social' ? 'social' : 'nonsocial';
-        return `img/${folder}/arm/${shapeIndex}-${colorIndex}.png`;
-    });
-
-    return armSequence;
-}
-const IMG_ARM = generateArmImageSequence(armMatrices, SOCIAL_VERSION);
-console.log(IMG_ARM);
-
-
-//load images (context and arm)
-function generateImagePath(imageType, shapeColorPair) {
-    const [shape, color] = shapeColorPair;
-    const folder = imageType === 'arm' ? `${SOCIAL_VERSION}/arm` : 'context';
-    return `img/${folder}/${shape}-${color}.png`;
-}
-function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-}
-
-//cover story
-//Context pairs
-function generateUniqueContextPairs(numPairs) {
-    let shapes = Array.from({length: 6}, (_, i) => i + 1);
-    let colors = Array.from({length: 6}, (_, i) => i + 1);
-    
-    // Shuffle arrays
-    shapes = shuffleArray([...shapes]);
-    colors = shuffleArray([...colors]);
-    
-    let pairs = [];
-    for (let i = 0; i < numPairs; i++) {
-        pairs.push([shapes[i], colors[i]]);
-    }
-    return pairs;
-}
-const contextPairs = generateUniqueContextPairs(NUM_CONTEXTS);
-
-// Generate random context sequence
-function generateContextSequence(numTrials, numContexts) {
-    let sequence = [];
-    for (let i = 0; i < numTrials; i++) {
-        sequence.push(Math.floor(Math.random() * numContexts));
-    }
-    return sequence;
-}
-// Generate context sequence for all trials
-const CONTEXT_INDICES = generateContextSequence(NUM_TRIALS + NUM_FORCED_TRIALS, NUM_CONTEXTS);
-
-//Arm pairs
-const unshuffledimages = IMAGE_INDICES.slice(0, NUM_ARMS).map(pair => 
-    generateImagePath('arm', pair)
-);
-const images = shuffleArray([...unshuffledimages]);
 
 
 // 3. Reward generation --------------------------------------------------------------
@@ -534,7 +474,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
                     <img src='${IMG_CONTEXT[trialIndex]}' 
                          style='max-width: 150px;'></img>
-                    <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                    <p><strong>${NAME_CONTEXT[trialIndex]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
                     <p style="color: red; font-weight: bold;">Please select ${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
                 </div>
@@ -563,7 +503,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                 data.reward = null;
                 data.valid_choice = false;
             }
-            data.context = CONTEXT_INDICES[trialIndex];
+            data.context = ID_CONTEXT[trialIndex];
             data.total_reward = jsPsych.data.get().select('reward').sum();
         }
     };
@@ -603,7 +543,7 @@ function createTrial(trialIndex) {
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
                     <img src='${IMG_CONTEXT[trialIndex]}' 
                          style='max-width: 150px;'></img>
-                    <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                    <p><strong>${NAME_CONTEXT[trialIndex]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
                     <p>Remaining Days: ${remainingTrials}</p>
                 </div>
@@ -622,7 +562,7 @@ function createTrial(trialIndex) {
             const choice = parseInt(data.response) - 1;
             const reward = allRewards[trialIndex][choice];
             data.reward = reward;
-            data.context = CONTEXT_INDICES[trialIndex];
+            data.context = ID_CONTEXT[trialIndex];
             data.total_reward = jsPsych.data.get().select('reward').sum();
         },
         data: {
@@ -649,7 +589,7 @@ function createFeedback(trialIndex) {
                     <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
                         <img src='${IMG_CONTEXT[trialIndex]}' 
                              style='max-width: 150px;'></img>
-                        <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
+                        <p><strong>${NAME_CONTEXT[trialIndex]}</strong></p>
                         <p>Current Total Aetherium: ${lastTrial.total_reward}</p>
                         <p>Remaining Days: ${remainingTrials-1}</p>
                     </div>
@@ -686,7 +626,7 @@ function createFeedback(trialIndex) {
         },
         data: {
             tag: 'feedback',
-            context: CONTEXT_INDICES[trialIndex]
+            context: ID_CONTEXT[trialIndex]
         }
     };
 }

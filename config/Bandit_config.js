@@ -5,7 +5,8 @@ const RANDOM_SEED = 42;
 
 // State Variables
 const STATE_VARIABLES = {
-  Time: {levels: 10, pattern: 'Loop'}
+  Time: {levels: 10, pattern: 'Loop'},
+  Planet: {levels: 3, pattern: 'Loop'}
 };
 
 // Arm Variables
@@ -20,3 +21,4 @@ const DISTRIBUTION_LINKS = [
   {stateVariable: 'Time', stateDistribution: 'Random Walk', interaction: '×', armDistribution: 'Identical', armVariable: 'Index'},
   {stateVariable: 'Time', stateDistribution: 'Identical', interaction: '+', armDistribution: 'Independent', armVariable: 'Index'}
 ];
+

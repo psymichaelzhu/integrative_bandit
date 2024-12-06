@@ -743,7 +743,8 @@ server <- function(input, output, session) {
   # Save Configuration
   output$save_config <- downloadHandler(
     filename = function() {
-      paste("Bandit_config_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".js", sep = "")
+      #paste("Bandit_config_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".js", sep = "")
+      paste("Bandit_config.js", sep = "")
     },
     content = function(file) {
       # Create JavaScript content

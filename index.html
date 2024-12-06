@@ -11,14 +11,27 @@
     <script src="js/plugin-html-slider-response.js"></script>
     <script src="instructions.js"></script>
     <script src="MAB.js"></script>
-    <script src="config/Bandit_config_20241202_044245.js"></script>
+    <script src="config/Bandit_config.js"></script>
     <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
 </body>
 <script>
 
-// variables are loaded from MAB.js
+// basic information are loaded from MAB.js
+// variables are loaded from Bandit_config.js
+
+// Check if Planet, Color and Shape exist in STATE_VARIABLES and ARM_VARIABLES, if not create them (To ensure the loading success)
+if (!STATE_VARIABLES.Planet) {
+    STATE_VARIABLES.Planet = {levels: 1, pattern: 'Loop'};
+}
+if (!ARM_VARIABLES.Color) {
+    ARM_VARIABLES.Color = {levels: 1, pattern: 'Loop'};
+}
+if (!ARM_VARIABLES.Shape) {
+    ARM_VARIABLES.Shape = {levels: 1, pattern: 'Loop'};
+}
+
 const NUM_CONTEXTS = STATE_VARIABLES.Planet.levels; 
 
 // 1. Initialize --------------------------------------------------------------
@@ -80,7 +93,6 @@ const debrief = {
         return `
             <h2>Experiment finished</h2>
             <p>Your total score: ${totalReward}</p>
-            <p>Your total payoff: ${totalReward*0.01} \$</p>
             <p>Thank you for your participation!</p>
             <p>[Press any key to exit]</p>
         `;
@@ -94,10 +106,10 @@ const instructions = {
     stimulus: function() {
         const text = instruction_texts[SOCIAL_VERSION];
         const gapPercentage = 5;
-        const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
-        const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+        const totalGapWidth = gapPercentage * (NUM_ARMS - 1);
+        const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
         const optionWidth = Math.min(10, optionWidth_raw);
-        const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
+        const totalWidth = optionWidth_raw * NUM_ARMS + totalGapWidth;
              
         return `    
             <p><b>${text.title}</b></p>
@@ -109,7 +121,7 @@ const instructions = {
                 `You can only see the outcome of your chosen ${SOCIAL_VERSION === 'social' ? 'alien' : 'ore'} after each choice.`}</p>
             ${text.choice_text.map(line => `<p>${line}</p>`).join('')}
             <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
-                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                ${Array(NUM_ARMS).fill().map((_, i) => `
                 <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
                     <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
                     <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${i+1}</strong></p>
@@ -194,9 +206,9 @@ function createVariableMatrices(variables, numTrials, numArms, isStateVariable =
     return matrices;
 }
 
-const stateMatrices = createVariableMatrices(STATE_VARIABLES, NUM_TRIALS, NUM_OPTIONS, true);  // State variables
+const stateMatrices = createVariableMatrices(STATE_VARIABLES, NUM_TRIALS, NUM_ARMS, true);  // State variables
 console.log(stateMatrices); 
-const armMatrices = createVariableMatrices(ARM_VARIABLES, NUM_TRIALS, NUM_OPTIONS, false);     // Arm variables
+const armMatrices = createVariableMatrices(ARM_VARIABLES, NUM_TRIALS, NUM_ARMS, false);     // Arm variables
 console.log(armMatrices);
 
 // Generate context image sequence based on Planet matrix
@@ -323,7 +335,7 @@ function generateContextSequence(numTrials, numContexts) {
 const CONTEXT_INDICES = generateContextSequence(NUM_TRIALS + NUM_FORCED_TRIALS, NUM_CONTEXTS);
 
 //Arm pairs
-const unshuffledimages = IMAGE_INDICES.slice(0, NUM_OPTIONS).map(pair => 
+const unshuffledimages = IMAGE_INDICES.slice(0, NUM_ARMS).map(pair => 
     generateImagePath('arm', pair)
 );
 const images = shuffleArray([...unshuffledimages]);
@@ -398,7 +410,7 @@ function createDistributionMatrix(stateVariable, armVariable, stateDistribution,
 function generateRewardMatrix() {
     // Initialize final matrix
     let finalMatrix = Array(NUM_TRIALS).fill().map(() => 
-        Array(NUM_OPTIONS).fill(0)
+        Array(NUM_ARMS).fill(0)
     );
     
     // Process each distribution link
@@ -425,7 +437,7 @@ function generateRewardMatrix() {
         
         // Add contribution to final matrix
         for(let i = 0; i < NUM_TRIALS; i++) {
-            for(let j = 0; j < NUM_OPTIONS; j++) {
+            for(let j = 0; j < NUM_ARMS; j++) {
                 finalMatrix[i][j] += contributionMatrix[i][j];
             }
         }
@@ -514,10 +526,10 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
         stimulus: function() {
             const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
             const gapPercentage = 5;
-            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
-            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const totalGapWidth = gapPercentage * (NUM_ARMS - 1);
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
             const optionWidth = Math.min(10, optionWidth_raw);
-            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
+            const totalWidth = optionWidth_raw * NUM_ARMS + totalGapWidth;      
             return `
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
                     <img src='${IMG_CONTEXT[trialIndex]}' 
@@ -527,7 +539,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                     <p style="color: red; font-weight: bold;">Please select ${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
                 </div>
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
-                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                ${Array(NUM_ARMS).fill().map((_, i) => `
                     <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
                         <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
                         <p class='small'><strong>Press key ${i+1}</strong></p>
@@ -536,7 +548,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                 </div>
             `;
         },
-        choices: Array(NUM_OPTIONS).fill().map((_, i) => (i + 1).toString()),
+        choices: Array(NUM_ARMS).fill().map((_, i) => (i + 1).toString()),
         data: {
             tag: 'forced_trial',
             forced_choice: forcedChoice
@@ -583,10 +595,10 @@ function createTrial(trialIndex) {
             const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
             const remainingTrials = NUM_FORCED_TRIALS+NUM_TRIALS - trialIndex;
             const gapPercentage = 5; // Gap between options (5% of screen width)
-            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1); // Total width taken by gaps
-            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const totalGapWidth = gapPercentage * (NUM_ARMS - 1); // Total width taken by gaps
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
             const optionWidth = Math.min(10, optionWidth_raw);
-            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
+            const totalWidth = optionWidth_raw * NUM_ARMS + totalGapWidth;      
             return `
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
                     <img src='${IMG_CONTEXT[trialIndex]}' 
@@ -596,7 +608,7 @@ function createTrial(trialIndex) {
                     <p>Remaining Days: ${remainingTrials}</p>
                 </div>
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
-                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                ${Array(NUM_ARMS).fill().map((_, i) => `
                     <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
                         <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
                         <p class='small'><strong>Press key ${i+1}</strong></p>
@@ -605,7 +617,7 @@ function createTrial(trialIndex) {
                 </div>
             `;
         },
-        choices: Array(NUM_OPTIONS).fill().map((_, i) => (i + 1).toString()),
+        choices: Array(NUM_ARMS).fill().map((_, i) => (i + 1).toString()),
         on_finish: function(data) {
             const choice = parseInt(data.response) - 1;
             const reward = allRewards[trialIndex][choice];
@@ -627,10 +639,10 @@ function createFeedback(trialIndex) {
             const choice = parseInt(lastTrial.response) - 1;
             const remainingTrials = NUM_FORCED_TRIALS+NUM_TRIALS - trialIndex;
             const gapPercentage = 5;
-            const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
-            const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+            const totalGapWidth = gapPercentage * (NUM_ARMS - 1);
+            const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
             const optionWidth = Math.min(10, optionWidth_raw);
-            const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
+            const totalWidth = optionWidth_raw * NUM_ARMS + totalGapWidth;
             
             return `
                 <div>

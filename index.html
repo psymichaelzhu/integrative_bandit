@@ -21,7 +21,7 @@
 // basic information are loaded from MAB.js
 // variables are loaded from Bandit_config.js
 
-
+const NAME = "Celestara Universe";
 const NAME_PLANET = [
   "Nova",
   "Solis",
@@ -127,7 +127,7 @@ const instructions = {
              
         return `    
             <p><b>${text.title}</b></p>
-            <p>Your supplement is limited and can only stay for ${NUM_TRIALS+NUM_FORCED_TRIALS} days.</p>
+            <p>Your supplement is limited and can only stay for ${NUM_TRIALS} days.</p>
             ${text.description.map(line => `<p>${line}</p>`).join('')}
             <p>You will be transported between ${NUM_CONTEXTS} different planets.</p>
             <p>${FEEDBACK_VERSION=="full" ? 
@@ -465,6 +465,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: function() {
             const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
+            const remainingTrials = NUM_TRIALS - trialIndex;
             const gapPercentage = 5;
             const totalGapWidth = gapPercentage * (NUM_ARMS - 1);
             const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
@@ -476,6 +477,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                          style='max-width: 150px;'></img>
                     <p><strong>${NAME_CONTEXT[trialIndex]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
+                    <p>Remaining Days: ${remainingTrials}</p>
                     <p style="color: red; font-weight: bold;">Please select ${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
                 </div>
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
@@ -533,7 +535,7 @@ function createTrial(trialIndex) {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: function() {
             const currentTotal = jsPsych.data.get().select('reward').sum() || 0;
-            const remainingTrials = NUM_FORCED_TRIALS+NUM_TRIALS - trialIndex;
+            const remainingTrials = NUM_TRIALS - trialIndex;
             const gapPercentage = 5; // Gap between options (5% of screen width)
             const totalGapWidth = gapPercentage * (NUM_ARMS - 1); // Total width taken by gaps
             const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
@@ -577,7 +579,7 @@ function createFeedback(trialIndex) {
         stimulus: function() {
             const lastTrial = jsPsych.data.get().last(1).values()[0];
             const choice = parseInt(lastTrial.response) - 1;
-            const remainingTrials = NUM_FORCED_TRIALS+NUM_TRIALS - trialIndex;
+            const remainingTrials = NUM_TRIALS - trialIndex;
             const gapPercentage = 5;
             const totalGapWidth = gapPercentage * (NUM_ARMS - 1);
             const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
@@ -660,11 +662,10 @@ const probabilityRatings = IMG_ARM.map((image, index) => {
 let timeline = [enterFullscreen, welcome, instructions];
 // Forced phase
 for (let i = 0; i < NUM_FORCED_TRIALS; i++) {
-    const forcedTrialIndex = i;
     const forcedChoice = FORCED_CHOICE_SEQUENCE[i];
-    const forcedTrial = createForcedChoiceTrial(forcedTrialIndex, forcedChoice);
-    const forcedFeedback = createForcedChoiceFeedback(forcedTrialIndex, forcedChoice);
-    
+    const forcedTrial = createForcedChoiceTrial(i, forcedChoice);
+    const forcedFeedback = createForcedChoiceFeedback(i, forcedChoice);
+    // Loop until valid choice is made
     timeline.push({
         timeline: [forcedTrial, forcedFeedback],
         loop_function: function(data) {
@@ -672,8 +673,9 @@ for (let i = 0; i < NUM_FORCED_TRIALS; i++) {
         }
     });
 }
+
 //Regular phase
-for (let i = NUM_FORCED_TRIALS; i < NUM_FORCED_TRIALS+NUM_TRIALS; i++) {
+for (let i = NUM_FORCED_TRIALS; i < NUM_TRIALS; i++) {
     timeline.push(createTrial(i));
     timeline.push(createFeedback(i));
 }

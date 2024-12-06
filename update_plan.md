@@ -1,39 +1,42 @@
-INDICES
+UI上的其他内容！！
 
-forced choice
+
 
 ## function
 通过UI进行设置众多参数 一起保存
 
-
-# function
-- results saving 更完整
-    parameter 23
-    实际的
-
 incentive (paper)
 instruction
 
+
+UI
+不确定性
+forced choice
+
+
+
+**不对称性*
 ---
 
-document
+**document**
 
 
 ---
-服务器
-
-
-问卷
+**服务器**
 
 
 
-
+复用
+复用：图性质
 
 # 检查 /next 3
 - Jspsych的内容，学习 修改
 - 随机化
 - 服务器
 
+
+保存参数: 提前存
+id 不同的csv
 
 ---
 # UI
@@ -42,10 +45,13 @@ document
 shiny闪退
 
 
----
 
-# Send
-视频和文档
+
+
+
+
+
+问卷
 
 
 

@@ -262,7 +262,7 @@ create_distribution_matrix <- function(state_levels, arm_levels,
                                      state_dist_type, arm_dist_type,
                                      interaction_type = "+") {
     
-    if (interaction_type == "×") {
+    if (interaction_type == "on") {
         # First generate arm sequence based on arm_dist_type
         arm_seq <- generate_sequence(arm_levels, arm_dist_type)
         
@@ -285,8 +285,8 @@ create_distribution_matrix <- function(state_levels, arm_levels,
     } else {
         # Generate arm sequence and repeat it for each state level
         arm_seq <- generate_sequence(arm_levels, arm_dist_type)
-        dist_matrix <- matrix(rep(arm_seq, each = state_levels), 
-                            nrow = state_levels, 
+        dist_matrix <- matrix(rep(arm_seq, each = 1), 
+                            nrow = 1, 
                             ncol = arm_levels)
         dist_matrix
     }
@@ -355,48 +355,93 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
 # Server =====================================================================
 
 server <- function(input, output, session) {
+  # Define parameters reactiveValues first
+  parameters <- reactiveValues(
+    num_trials = 10,
+    num_arms = 5,
+    seed = 42
+  )
+
+  # Update parameters when inputs change
+  observeEvent(input$num_trials, {
+    new_value <- input$num_trials
+    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
+      updateNumericInput(session, "num_trials", value = parameters$num_trials)
+    } else {
+      parameters$num_trials <- new_value
+    }
+  })
+
+  observeEvent(input$num_arms, {
+    new_value <- input$num_arms
+    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
+      updateNumericInput(session, "num_arms", value = parameters$num_arms)
+    } else {
+      parameters$num_arms <- new_value
+    }
+  })
+
+  observeEvent(input$seed, {
+    new_value <- input$seed
+    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
+      updateNumericInput(session, "seed", value = parameters$seed)
+    } else {
+      parameters$seed <- new_value
+    }
+  })
+
+  # Modify auto_update_trigger to use parameters
+  auto_update_trigger <- reactive({
+    list(
+      parameters$num_trials,
+      parameters$num_arms,
+      parameters$seed
+    )
+  })
+
+  # Update state_data when num_trials changes
+  observeEvent(parameters$num_trials, {
+    current_data <- state_data()
+    time_row <- which(current_data$Name == "Time")
+    if (length(time_row) > 0) {
+      current_data$Levels[time_row] <- parameters$num_trials
+      state_data(current_data)
+    }
+  })
+
+  # Update arm_data when num_arms changes
+  observeEvent(parameters$num_arms, {
+    current_data <- arm_data()
+    position_row <- which(current_data$Name == "Index")
+    if (length(position_row) > 0) {
+      current_data$Levels[position_row] <- parameters$num_arms
+      arm_data(current_data)
+    }
+  })
+
   # Add auto-update trigger
   auto_update_trigger <- reactive({
     list(
-      input$num_trials,
-      input$num_arms,
-      input$seed
+      parameters$num_trials,
+      parameters$num_arms,
+      parameters$seed
     )
   })
   
   # Automatically update reward matrix when basic parameters change
   observeEvent(auto_update_trigger(), {
     # Set seed before generating new matrix
-    set.seed(input$seed)
-    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), input$num_trials, input$num_arms)
+    set.seed(parameters$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
     reward_matrix(new_matrix)
   })
 
   # Keep existing update_demo button for manual updates
   observeEvent(input$update_demo, {
     # Set seed before generating new matrix
-    set.seed(input$seed)
-    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), input$num_trials, input$num_arms)
+    set.seed(parameters$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
     reward_matrix(new_matrix)
-  })
-
-  # Update default rows when num_trials or num_arms changes
-  observeEvent(input$num_trials, {
-    current_data <- state_data()
-    time_row <- which(current_data$Name == "Time")
-    if (length(time_row) > 0) {
-      current_data$Levels[time_row] <- input$num_trials
-      state_data(current_data)
-    }
-  })
-
-  observeEvent(input$num_arms, {
-    current_data <- arm_data()
-    position_row <- which(current_data$Name == "Index")
-    if (length(position_row) > 0) {
-      current_data$Levels[position_row] <- input$num_arms
-      arm_data(current_data)
-    }
   })
 
   # Initialize State and Arm Data with Default Rows
@@ -426,59 +471,47 @@ server <- function(input, output, session) {
   
   # Add new reactive values to track link state
   observe({
-    # 在初始化时就设置正确的状态
     if (is.null(input$link_distributions)) {
       updateActionButton(session, "link_distributions", value = 0)
     }
-    
-    # 获取当前选择
     current_state <- input$link_state
     current_arm <- input$link_arm
-    
-    # 获取可用选项
     state_choices <- state_data()$Name
     arm_choices <- arm_data()$Name
-    
-    # 检查是否链接
     if (input$link_distributions %% 2 == 1) {
-      # 链接状态 - 正常下拉行为
       updateSelectInput(session, "link_state", 
                        choices = state_choices,
                        selected = if (current_state %in% state_choices) current_state else state_choices[1])
       updateSelectInput(session, "link_state_function",
                        choices = c("Independent", "Monotonic", "Random Walk"),
-                       selected = input$link_state_function)
+                       selected = "Independent")
     } else {
-      # 断开状态 - 静态"Time"和"Identical"
       updateSelectInput(session, "link_state",
-                       choices = "Time",
-                       selected = "Time")
+                       choices = " ",
+                       selected = " ")
       updateSelectInput(session, "link_state_function",
-                       choices = "Identical",
-                       selected = "Identical")
+                       choices = " ",
+                       selected = " ")
       
-      # 添加灰色样式
       shinyjs::addCssClass("link_state", "text-muted")
       shinyjs::addCssClass("link_state_function", "text-muted")
       shinyjs::disable("link_state")
       shinyjs::disable("link_state_function")
     }
-    
-    # 总是更新arm下拉菜单
+   
     updateSelectInput(session, "link_arm", 
                      choices = arm_choices,
                      selected = if (current_arm %in% arm_choices) current_arm else arm_choices[1])
-  }, priority = 1000)  # 高优先级确保在启动时运行
+  }, priority = 1000)  
   
   # Initialize the default values to match input values
   observe({
-    # Update initial values when the app starts
     isolate({
       # Update Time levels
       current_state_data <- state_data()
       time_row <- which(current_state_data$Name == "Time")
       if (length(time_row) > 0) {
-        current_state_data$Levels[time_row] <- input$num_trials
+        current_state_data$Levels[time_row] <- parameters$num_trials
         state_data(current_state_data)
       }
       
@@ -486,15 +519,14 @@ server <- function(input, output, session) {
       current_arm_data <- arm_data()
       position_row <- which(current_arm_data$Name == "Index")
       if (length(position_row) > 0) {
-        current_arm_data$Levels[position_row] <- input$num_arms
+        current_arm_data$Levels[position_row] <- parameters$num_arms
         arm_data(current_arm_data)
       }
     })
   }, priority = 1000)  # High priority to ensure it runs at startup
   
-  # Add/Update State Variable with protection for Time
+  # Add/Update State Variable with protection for default basic rows (Time and Index)
   observeEvent(input$add_state, {
-    # 如果尝试修改Time，直接返回
     if (input$state_name == "Time") {
       return()
     }
@@ -511,10 +543,6 @@ server <- function(input, output, session) {
     duplicate_idx <- which(current_data$Name == input$state_name)
     
     if (length(duplicate_idx) > 0) {
-      # 如果是Time行，不允许修改
-      if (current_data$Name[duplicate_idx] == "Time") {
-        return()
-      }
       # Replace existing row
       current_data[duplicate_idx, ] <- new_state
       state_data(current_data)
@@ -525,9 +553,7 @@ server <- function(input, output, session) {
     updateSelectInput(session, "link_state", choices = state_data()$Name)
   })
   
-  # Add/Update Arm Variable with protection for Index
   observeEvent(input$add_arm, {
-    # 如果尝试修改Index，直接返回
     if (input$arm_name == "Index") {
       return()
     }
@@ -544,10 +570,6 @@ server <- function(input, output, session) {
     duplicate_idx <- which(current_data$Name == input$arm_name)
     
     if (length(duplicate_idx) > 0) {
-      # 如果是Index行，不允许修改
-      if (current_data$Name[duplicate_idx] == "Index") {
-        return()
-      }
       # Replace existing row
       current_data[duplicate_idx, ] <- new_arm
       arm_data(current_data)
@@ -558,10 +580,10 @@ server <- function(input, output, session) {
     updateSelectInput(session, "link_arm", choices = arm_data()$Name)
   })
   
-  # Add Link with interaction type
+  # Add/Update Link with interaction type
   observeEvent(input$add_link, {
     # Create new link with current interaction state
-    current_interaction <- ifelse(input$link_distributions %% 2 == 1, "×", "+")
+    current_interaction <- ifelse(input$link_distributions %% 2 == 1, "on", " ")
     
     new_link <- data.frame(
       State_Variable = input$link_state,
@@ -577,7 +599,7 @@ server <- function(input, output, session) {
     duplicate_idx <- which(
       current_data$State_Variable == input$link_state & 
       current_data$Arm_Variable == input$link_arm &
-      current_data$Interaction == current_interaction  # Add interaction to duplicate check
+      current_data$Interaction == current_interaction  
     )
     
     if (length(duplicate_idx) > 0) {
@@ -592,18 +614,6 @@ server <- function(input, output, session) {
         link_data(rbind(current_data, new_link))
       }
     }
-    
-    # Get the levels for state and arm variables
-    state_levels <- state_data()[state_data()$Name == input$link_state, "Levels"]
-    arm_levels <- arm_data()[arm_data()$Name == input$link_arm, "Levels"]
-    
-    # Generate distribution matrix
-    dist_matrix <- create_distribution_matrix(
-      state_levels = state_levels,
-      arm_levels = arm_levels,
-      state_dist_type = input$link_state_function,
-      arm_dist_type = input$link_arm_function
-    )
   })
   
   # Link table rendering with improved remove button
@@ -630,17 +640,16 @@ server <- function(input, output, session) {
     colnames(df) <- c("State Variable", "State Distribution", 
                       "Interaction", "Arm Distribution", 
                       "Arm Variable", "Operation")
-
     datatable(
       df,
       escape = FALSE,
-      selection = 'single',  # 启用单行选择
+      selection = 'single',  #  Allow single row selection
       rownames = FALSE,
       options = list(
         dom = 't',
         paging = FALSE,
         scrollX = FALSE,
-        stripeClasses = FALSE,  # 禁用条纹样式
+        stripeClasses = FALSE,  #  Disable striped style
         columnDefs = list(
           list(
             targets = "_all",
@@ -667,11 +676,11 @@ server <- function(input, output, session) {
     ) %>% 
       formatStyle(
         columns = 1:6,
-        backgroundColor = 'white'  # 设置所有单元格背景为白色
+        backgroundColor = 'white'  #  Set all cell backgrounds to white
       )
   })
   
-  # Remove link by composite key (State_Variable|Arm_Variable)
+  # Remove link by within-row key 
   observeEvent(input$remove_link_key, {
     if (!is.null(input$remove_link_key)) {
       # Split the composite key (now includes interaction)
@@ -694,7 +703,7 @@ server <- function(input, output, session) {
   # Remove State by Name with link cleanup
   observeEvent(input$remove_state_name, {
     name_to_remove <- input$remove_state_name
-    if (!is.null(name_to_remove) && name_to_remove != "Time") {  # Protect Time row only
+    if (!is.null(name_to_remove) && !name_to_remove %in% c("Time", "Planet")) {  # Protect Time and Planet rows only
         # First remove any links that reference this state
         current_links <- link_data()
         links_to_keep <- current_links$State_Variable != name_to_remove
@@ -713,7 +722,7 @@ server <- function(input, output, session) {
   # Remove Arm by Name with link cleanup
   observeEvent(input$remove_arm_name, {
     name_to_remove <- input$remove_arm_name
-    if (!is.null(name_to_remove) && name_to_remove != "Index") {  # Protect default row
+    if (!is.null(name_to_remove) && !name_to_remove %in% c("Index", "Color", "Shape")) {  # Protect default rows
       # First check if this arm is the only one referenced in any link
       current_links <- link_data()
       
@@ -751,13 +760,13 @@ server <- function(input, output, session) {
     df <- state_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
       if (df$Name[i] == "Time") {
-        # Time行完全不可修改
+        # Time row is completely uneditable
         return("")
       } else if (df$Name[i] == "Planet") {
-        # Planet行可以修改但不能删除
+        # Planet row is editable but not deletable
         return("")
       } else {
-        # 其他行可以删除
+        # Other rows are deletable
         return(sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
                       df$Name[i]))
       }
@@ -807,13 +816,13 @@ server <- function(input, output, session) {
     df <- arm_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
       if (df$Name[i] == "Index") {
-        # Index行完全不可修改
+        # Index row is completely uneditable
         return("")
       } else if (df$Name[i] %in% c("Color", "Shape")) {
-        # Color和Shape行可以修改但不能删除
+        # Color and Shape rows are editable but not deletable
         return("")
       } else {
-        # 其他行可以删除
+        # Other rows are deletable
         return(sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
                       df$Name[i]))
       }
@@ -889,7 +898,7 @@ server <- function(input, output, session) {
   forced_distribution <- reactive({
     get_forced_choice_distribution(
       input$num_forced_choice,
-      input$num_arms,
+      parameters$num_arms,
       input$forced_pattern
     )
   })
@@ -957,23 +966,22 @@ server <- function(input, output, session) {
   
   # Update Demo (renamed from Generate Demo)
   observeEvent(input$update_demo, {
-    # 设置随机种子
-    set.seed(input$seed)
+    set.seed(parameters$seed)
     
-    # 生成基础reward matrix
+    # Generate base reward matrix
     base_matrix <- summary_reward_distribution(
       link_data(), 
       state_data(), 
       arm_data(), 
-      input$num_trials, 
-      input$num_arms
+      parameters$num_trials, 
+      parameters$num_arms
     )
     
-    # 获取当前的noise和cost序列
+    # Get current noise and cost sequences
     current_noise <- noise_sequence()
     current_cost <- cost_sequence()
     
-    # 生成最终的reward matrix
+    # Generate final reward matrix
     final_matrix <- generate_final_reward_matrix(
       base_matrix,
       current_noise,
@@ -981,10 +989,10 @@ server <- function(input, output, session) {
       input$reward_type
     )
     
-    # 更新reward matrix
+    # Update reward matrix
     reward_matrix(final_matrix)
     
-    # 打印调试信息
+    # Print debug information
     cat("Final Reward Matrix generated:\n")
     cat("Applied Noise:", paste(current_noise, collapse = ", "), "\n")
     cat("Applied Cost:", paste(current_cost, collapse = ", "), "\n")
@@ -1003,8 +1011,8 @@ server <- function(input, output, session) {
       # Add parameters section
       lines <- c(lines,
                 "// Basic Parameters",
-                paste0("const NUM_TRIALS = ", input$num_trials, ";"),
-                paste0("const NUM_ARMS = ", input$num_arms, ";"),
+                paste0("const NUM_TRIALS = ", parameters$num_trials, ";"),
+                paste0("const NUM_ARMS = ", parameters$num_arms, ";"),
                 paste0("const REWARD_TYPE = '", input$reward_type, "';"),
                 paste0("const FEEDBACK_VERSION = '", input$feedback_version, "';"),
                 paste0("const COVER_STORY = '", input$cover_story, "';"),
@@ -1107,114 +1115,38 @@ server <- function(input, output, session) {
     }
   })
 
-  # Add reactive values to safely store parameters
-  parameters <- reactiveValues(
-    num_trials = 10,
-    num_arms = 5,
-    seed = 42
-  )
-
-  # Safe update observers
-  observeEvent(input$num_trials, {
-    # Validate input
-    new_value <- input$num_trials
-    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
-      updateNumericInput(session, "num_trials", value = parameters$num_trials)
-    } else {
-      parameters$num_trials <- new_value
-      
-      # Update Time levels
-      current_data <- state_data()
-      time_row <- which(current_data$Name == "Time")
-      if (length(time_row) > 0) {
-        current_data$Levels[time_row] <- parameters$num_trials
-        state_data(current_data)
-      }
-    }
-  })
-
-  observeEvent(input$num_arms, {
-    # Validate input
-    new_value <- input$num_arms
-    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
-      updateNumericInput(session, "num_arms", value = parameters$num_arms)
-    } else {
-      parameters$num_arms <- new_value
-      
-      # Update Index levels
-      current_data <- arm_data()
-      position_row <- which(current_data$Name == "Index")
-      if (length(position_row) > 0) {
-        current_data$Levels[position_row] <- parameters$num_arms
-        arm_data(current_data)
-      }
-    }
-  })
-
-  observeEvent(input$seed, {
-    # Validate input
-    new_value <- input$seed
-    if (is.null(new_value) || is.na(new_value) || new_value < 1) {
-      updateNumericInput(session, "seed", value = parameters$seed)
-    } else {
-      parameters$seed <- new_value
-    }
-  })
-
-  # Modify auto_update_trigger to use safe parameters
-  auto_update_trigger <- reactive({
-    list(
-      parameters$num_trials,
-      parameters$num_arms,
-      parameters$seed
-    )
-  })
-
-  # Modify reward matrix generation to use safe parameters
-  observeEvent(auto_update_trigger(), {
-    set.seed(parameters$seed)
-    new_matrix <- summary_reward_distribution(
-      link_data(), 
-      state_data(), 
-      arm_data(), 
-      parameters$num_trials, 
-      parameters$num_arms
-    )
-    reward_matrix(new_matrix)
-  })
-
-  # 处理 Check 按钮点击事件
+  # Check function
   observeEvent(input$check_link, {
-    # 获取选中的行
+    # Get selected row
     selected_row <- input$link_table_rows_selected
     
     if (!is.null(selected_row)) {
-      # 获取选中的链接数据
+      # Get selected link data
       link <- link_data()[selected_row, , drop = FALSE]
       
-      # 获取相关变量的 levels
+      # Get levels for related variables
       state_levels <- state_data()[state_data()$Name == link$State_Variable, "Levels"]
       arm_levels <- arm_data()[arm_data()$Name == link$Arm_Variable, "Levels"]
       
-      # 生成单个链接的分布矩阵
+      # Generate distribution matrix for single link
       set.seed(parameters$seed)
       single_matrix <- summary_reward_distribution(
-        link,  # 只传入选中的链接
+        link,  # Pass only selected link
         state_data(), 
         arm_data(), 
         parameters$num_trials, 
         parameters$num_arms
       )
       
-      # 更新热图
+      # Update heatmap
       reward_matrix(single_matrix)
     } else {
-      # 如果没有选中行显示提示消息
+      # If no row is selected, show a warning message
       showNotification("Please select a link first", type = "warning")
     }
   })
 
-  # 添加一个恢复完整视图的功能到 Update Demo 按钮
+  # Add a restore full view function to Update Demo button
   observeEvent(input$update_demo, {
     set.seed(parameters$seed)
     new_matrix <- summary_reward_distribution(
@@ -1227,84 +1159,84 @@ server <- function(input, output, session) {
     reward_matrix(new_matrix)
   })
 
-  # 创建响应式值存储Noise和Cost序列
+  # Create reactive values to store Noise and Cost sequences
   noise_sequence <- reactiveVal(numeric(0))
   cost_sequence <- reactiveVal(numeric(0))
 
-  # 辅助函数：将level转换为数值
+  # Helper function: Convert level to value
   level_to_value <- function(level) {
     switch(level,
            "None" = 0,
            "Low" = 1,
            "Median" = 5,
            "High" = 10,
-           0)  # 默认值
+           0)  # Default value
   }
 
-  # 辅助函数：生成序列
+  # Helper function: Generate sequence
   generate_sequence <- function(pattern, level, num_arms) {
     if (pattern == "Equal") {
-      # Equal pattern: 所有arm使用相同的值
+      # Equal pattern: All arms use the same value
       rep(level_to_value(level), num_arms)
     } else {  # Unequal
-      # 从四个level中随机选择
-      sample(c(0, 1, 5, 10), num_arms, replace = TRUE)
+      # Randomly select from four levels
+      sample(c(0, 1, 5, 10), num_arms, replace = TRUE, prob = rep(0.25, 4))
     }
   }
 
-  # 观察Noise设置的变化
+  # Observe changes in Noise settings
   observe({
-    # 生成新的noise序列
+    # Generate new noise sequence
     new_noise <- generate_sequence(
       input$noise_pattern,
       input$noise_level,
-      input$num_arms
+      parameters$num_arms
     )
     
-    # 更新noise序列
+    # Update noise sequence
     noise_sequence(new_noise)
     
-    # 打印结果
+    # Print results
     cat("Noise sequence updated:\n")
     cat("Pattern:", input$noise_pattern, "\n")
     cat("Level:", input$noise_level, "\n")
     cat("Values:", paste(new_noise, collapse = ", "), "\n\n")
   })
 
-  # 观察Cost设置的变化
+  # Observe changes in Cost settings
   observe({
-    # 生成新的cost序列
+    # Generate new cost sequence
     new_cost <- generate_sequence(
       input$cost_pattern,
       input$cost_level,
-      input$num_arms
+      parameters$num_arms
     )
     
-    # 更新cost序列
+    # Update cost sequence
     cost_sequence(new_cost)
     
-    # 打印结果
+    # Print results
     cat("Cost sequence updated:\n")
     cat("Pattern:", input$cost_pattern, "\n")
     cat("Level:", input$cost_level, "\n")
     cat("Values:", paste(new_cost, collapse = ", "), "\n\n")
   })
 
-  # 当num_arms改变时也需要更新序列
-  observeEvent(input$num_arms, {
-    # 更新noise序列
+  # When num_arms changes, also update sequences
+  observeEvent(parameters$num_arms, {
+    # Update noise sequence
     new_noise <- generate_sequence(
       input$noise_pattern,
       input$noise_level,
-      input$num_arms
+      parameters$num_arms
     )
     noise_sequence(new_noise)
     
-    # 更新cost序列
+    # Update cost sequence
     new_cost <- generate_sequence(
       input$cost_pattern,
       input$cost_level,
-      input$num_arms
+      parameters$num_arms
     )
     cost_sequence(new_cost)
   })
@@ -1342,18 +1274,18 @@ server <- function(input, output, session) {
     } else {
       parameters$num_forced_choice <- new_value
     }
-  })
+  }, priority = 1000)
 
   # Ensure forced_choice does not exceed NUM_TRIALS
   observe({
-    # 获取当前的num_trials值
-    max_allowed <- input$num_trials
+    # Get current num_trials value
+    max_allowed <- parameters$num_trials
     
-    # 更新num_forced_choice的限制
+    # Update num_forced_choice limit
     updateNumericInput(session, "num_forced_choice",
                       max = max_allowed,
                       value = isolate({
-                        # 只在当前值超过新的最大值时才更新
+                        # Only update if current value exceeds new maximum
                         current_value <- input$num_forced_choice
                         if (is.null(current_value) || current_value > max_allowed) {
                           max_allowed
@@ -1363,57 +1295,57 @@ server <- function(input, output, session) {
                       }))
   })
 
-  # 修改reward matrix的生成逻辑
+  # Modify reward matrix generation logic
   generate_final_reward_matrix <- function(base_matrix, noise_seq, cost_seq, reward_type) {
     num_trials <- nrow(base_matrix)
     num_arms <- ncol(base_matrix)
     final_matrix <- base_matrix
     
-    # 应用noise
+    # Apply noise
     for (arm in 1:num_arms) {
       if (noise_seq[arm] > 0) {
-        # 生成噪声
+        # Generate noise
         noise <- rnorm(num_trials, mean = 0, sd = noise_seq[arm])
         final_matrix[, arm] <- final_matrix[, arm] + noise
       }
     }
     
-    # 应用cost
+    # Apply cost
     for (arm in 1:num_arms) {
       if (cost_seq[arm] > 0) {
         final_matrix[, arm] <- final_matrix[, arm] - cost_seq[arm]
       }
     }
     
-    # 截断到合法范围
+    # Truncate to valid range
     if (reward_type == "binary") {
-      final_matrix <- pmax(pmin(final_matrix, 100), 0) / 100  # 截断到[0,1]
+      final_matrix <- pmax(pmin(final_matrix, 100), 0) / 100  # Truncate to [0,1]
     } else {
-      final_matrix <- pmax(pmin(final_matrix, 100), 0)  # 截断到[0,100]
+      final_matrix <- pmax(pmin(final_matrix, 100), 0)  # Truncate to [0,100]
     }
     
     return(final_matrix)
   }
 
-  # 修改Update Demo按钮的处理逻辑
+  # Modify Update Demo button processing logic
   observeEvent(input$update_demo, {
-    # 设置随机种子
-    set.seed(input$seed)
+    # Set random seed
+    set.seed(parameters$seed)
     
-    # 生成基础reward matrix
+    # Generate base reward matrix
     base_matrix <- summary_reward_distribution(
       link_data(), 
       state_data(), 
       arm_data(), 
-      input$num_trials, 
-      input$num_arms
+      parameters$num_trials, 
+      parameters$num_arms
     )
     
-    # 获取当前的noise和cost序列
+    # Get current noise and cost sequences
     current_noise <- noise_sequence()
     current_cost <- cost_sequence()
     
-    # 生成最终的reward matrix
+    # Generate final reward matrix
     final_matrix <- generate_final_reward_matrix(
       base_matrix,
       current_noise,
@@ -1421,34 +1353,34 @@ server <- function(input, output, session) {
       input$reward_type
     )
     
-    # 更新reward matrix
+    # Update reward matrix
     reward_matrix(final_matrix)
     
-    # 打印调试信息
+    # Print debug information
     cat("Final Reward Matrix generated:\n")
     cat("Applied Noise:", paste(current_noise, collapse = ", "), "\n")
     cat("Applied Cost:", paste(current_cost, collapse = ", "), "\n")
   })
 
-  # 修改auto_update_trigger的处理
+  # Modify auto_update_trigger processing
   observeEvent(auto_update_trigger(), {
-    # 设置随机种子
-    set.seed(input$seed)
+    # Set random seed
+    set.seed(parameters$seed)
     
-    # 生成基础reward matrix
+    # Generate base reward matrix
     base_matrix <- summary_reward_distribution(
       link_data(), 
       state_data(), 
       arm_data(), 
-      input$num_trials, 
-      input$num_arms
+      parameters$num_trials, 
+      parameters$num_arms
     )
     
-    # 获取当前的noise和cost序列
+    # Get current noise and cost sequences
     current_noise <- noise_sequence()
     current_cost <- cost_sequence()
     
-    # 生成最终的reward matrix
+    # Generate final reward matrix
     final_matrix <- generate_final_reward_matrix(
       base_matrix,
       current_noise,
@@ -1456,7 +1388,7 @@ server <- function(input, output, session) {
       input$reward_type
     )
     
-    # 更新reward matrix
+    # Update reward matrix
     reward_matrix(final_matrix)
   })
 

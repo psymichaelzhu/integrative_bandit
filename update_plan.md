@@ -1,19 +1,20 @@
-bug
 
-update
-崩坏
 
-检查代码
+Arm空的情况
+
+
+
+模式限定
+
 
 noise这些仅仅对numeric有效
 
 
-
 Time 修改
-默认灰色
-不显示
-  计算逻辑
-模式只independent和identical
+模式
+
+
+
 
 
 大写

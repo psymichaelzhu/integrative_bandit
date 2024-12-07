@@ -1,24 +1,36 @@
-UI上的其他内容！！
+问卷
+
+forced设置 呈现 其他内容
+算法实现
+
+均等不均等√
+  联结分配情况 on feature
 
 
 
-## function
-通过UI进行设置众多参数 一起保存
+保存参数 UI
+
+保存参数 game
+
+
+其他不对称性实现
+
+
+seed位置 forced
+
+
+打乱 图 刺激
+
+
+允许自定义：覆盖
+
+
+
+**document**
+
 
 incentive (paper)
 instruction
-
-
-UI
-不确定性
-forced choice
-
-
-
-**不对称性*
----
-
-**document**
 
 
 ---

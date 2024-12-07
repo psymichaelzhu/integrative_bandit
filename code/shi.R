@@ -24,6 +24,62 @@ ui <- fluidPage(
     column(4, numericInput("num_arms", "Number of Arms", value = 5, min = 1)),
     column(4, numericInput("seed", "Random Seed", value = 42, min = 1))
   ),
+
+  # Additional Configuration Options
+  fluidRow(
+    column(4, selectInput("reward_type", "Reward Type", 
+                         choices = c("numeric", "binary"),
+                         selected = "numeric")),
+    column(4, selectInput("cover_story", "Cover Story",
+                         choices = c("social", "non-social"), 
+                         selected = "non-social")),
+    column(4, selectInput("feedback_version", "Feedback Version",
+                         choices = c("full", "contingent"),
+                         selected = "contingent"))
+  ),
+  
+
+
+  # Asymmetric Section
+  fluidRow(
+    column(12,
+           h4("Asymmetry Configuration")
+    )
+  ),
+  
+  fluidRow(
+    # Information Column
+    column(4,
+           h5("Information"),
+           selectInput("forced_pattern", "Pattern",
+                      choices = c("Equal", "Unequal"),
+                      selected = "Equal"),
+           numericInput("num_forced_choice", "# Forced Choice",
+                       value = 0, min = 0, max = 100)
+    ),
+    
+    # Noise Column
+    column(4,
+           h5("Noise"),
+           selectInput("noise_pattern", "Pattern",
+                      choices = c("Equal", "Unequal"),
+                      selected = "Equal"),
+           selectInput("noise_level", "Noise Level",
+                      choices = c("None", "Low", "Median", "High"),
+                      selected = "None")
+    ),
+    
+    # Cost Column
+    column(4,
+           h5("Cost"),
+           selectInput("cost_pattern", "Pattern",
+                      choices = c("Equal", "Unequal"),
+                      selected = "Equal"),
+           selectInput("cost_level", "Cost Level",
+                      choices = c("None", "Low", "Median", "High"),
+                      selected = "None")
+    )
+  ),
   
   # Top: Reward Matrix Visualization
   fluidRow(
@@ -32,6 +88,8 @@ ui <- fluidPage(
            plotOutput("reward_matrix", height = "300px")
     )
   ),
+  
+  
   
   # State and Arm Variables Configuration (side by side)
   fluidRow(
@@ -716,28 +774,132 @@ server <- function(input, output, session) {
   # Reward Matrix Heatmap with seed control
   reward_matrix <- reactiveVal(matrix(0, nrow = 10, ncol = 5))  # Default size
 
-  # Modify the reward matrix plot to use the reactive value:
+  # Add function to get forced choice distribution
+  get_forced_choice_distribution <- function(num_trials, num_arms, pattern) {
+    if (num_trials <= 0) return(NULL)
+    
+    forced_choices <- numeric(num_trials)
+    
+    if (pattern == "Equal") {
+      # Equal pattern: Assign as many trials as possible to each arm
+      repeats <- ceiling(num_trials / num_arms)
+      all_choices <- rep(1:num_arms, repeats)[1:num_trials]
+      forced_choices <- sample(all_choices) # Randomly shuffle the order
+    } else { # Unequal
+      # Generate a temporary sequence of choices: Sample with decreasing probability
+      probs <- exp(-(1:num_arms) / 2)
+      probs <- probs / sum(probs)
+      temp_choices <- sample(1:num_arms, num_trials, prob = probs, replace = TRUE)
+      # Randomly generate an arm permutation for mapping
+      arm_mapping <- sample(1:num_arms)
+      forced_choices <- arm_mapping[temp_choices]
+    }
+    return(forced_choices)
+  }
+  
+  # Create a reactive value to store the forced choice distribution
+  forced_distribution <- reactive({
+    get_forced_choice_distribution(
+      input$num_forced_choice,
+      input$num_arms,
+      input$forced_pattern
+    )
+  })
+  
+  # Modify the reward matrix plot code
   output$reward_matrix <- renderPlot({
     mat <- reward_matrix()
+    
+    if (input$reward_type == "binary") {
+        mat <- mat / 100
+    }
+    
     heatmap_data <- data.frame(
-      Trial = rep(1:nrow(mat), ncol(mat)),
-      Arm = rep(1:ncol(mat), each = nrow(mat)),
-      Value = as.vector(mat)
+        Trial = rep(1:nrow(mat), ncol(mat)),
+        Arm = rep(1:ncol(mat), each = nrow(mat)),
+        Value = as.vector(mat)
     )
-    ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
-      geom_tile(width = 1, height = 1) +
-      scale_fill_viridis_c(limits = c(0, 100)) +
-      theme_minimal() +
-      labs(x = "Trial", y = "Arm", fill = "Reward") +
-      theme_bruce() +
-      scale_x_continuous(expand = c(0, 0), breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10))))) +
-      scale_y_continuous(expand = c(0, 0), breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10))))) 
+    
+    scale_limits <- if (input$reward_type == "binary") c(0, 1) else c(0, 100)
+    reward_label <- if (input$reward_type == "binary") "Reward Probability" else "Reward Value        "
+    
+    # Create base plot
+    p <- ggplot(heatmap_data, aes(x = Trial, y = Arm, fill = Value)) +
+        geom_tile(width = 1, height = 1)
+    
+    # Add forced choice indicator
+    if (input$num_forced_choice > 0) {
+        # Add overall range box
+        p <- p + geom_rect(
+            aes(xmin = 0.5, xmax = input$num_forced_choice + 0.5,
+                ymin = 0.5, ymax = ncol(mat) + 0.5),
+            fill = NA,
+            color = "red",
+            linetype = "dashed",
+            size = 1,
+            inherit.aes = FALSE
+        )
+        
+        # Add forced choice indicator
+        forced_choices <- forced_distribution()
+        if (!is.null(forced_choices)) {
+            forced_df <- data.frame(
+                Trial = 1:length(forced_choices),
+                Arm = forced_choices
+            )
+            p <- p + geom_point(data = forced_df,
+                               aes(x = Trial, y = Arm),
+                               shape = 9,
+                               size = 3,
+                               color = "red",
+                               inherit.aes = FALSE)
+        }
+    }
+    
+    # Add remaining plot elements
+    p + scale_fill_viridis_c(limits = scale_limits) +
+        theme_minimal() +
+        labs(x = "Trial", y = "Arm", fill = reward_label) +
+        theme_bruce() +
+        scale_x_continuous(expand = c(0, 0), 
+            breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10))))) +
+        scale_y_continuous(expand = c(0, 0), 
+            breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10)))))
   })
   
   # Update Demo (renamed from Generate Demo)
   observeEvent(input$update_demo, {
-    # Add your demo update logic here
-    # This is a placeholder for the demo update functionality
+    # 设置随机种子
+    set.seed(input$seed)
+    
+    # 生成基础reward matrix
+    base_matrix <- summary_reward_distribution(
+      link_data(), 
+      state_data(), 
+      arm_data(), 
+      input$num_trials, 
+      input$num_arms
+    )
+    
+    # 获取当前的noise和cost序列
+    current_noise <- noise_sequence()
+    current_cost <- cost_sequence()
+    
+    # 生成最终的reward matrix
+    final_matrix <- generate_final_reward_matrix(
+      base_matrix,
+      current_noise,
+      current_cost,
+      input$reward_type
+    )
+    
+    # 更新reward matrix
+    reward_matrix(final_matrix)
+    
+    # 打印调试信息
+    cat("Final Reward Matrix generated:\n")
+    cat("Applied Noise:", paste(current_noise, collapse = ", "), "\n")
+    cat("Applied Cost:", paste(current_cost, collapse = ", "), "\n")
   })
   
   # Save Configuration
@@ -938,7 +1100,7 @@ server <- function(input, output, session) {
       # 更新热图
       reward_matrix(single_matrix)
     } else {
-      # 如果没有选中行，显示提示消息
+      # 如果没有选中行显示提示消息
       showNotification("Please select a link first", type = "warning")
     }
   })
@@ -955,6 +1117,240 @@ server <- function(input, output, session) {
     )
     reward_matrix(new_matrix)
   })
+
+  # 创建响应式值存储Noise和Cost序列
+  noise_sequence <- reactiveVal(numeric(0))
+  cost_sequence <- reactiveVal(numeric(0))
+
+  # 辅助函数：将level转换为数值
+  level_to_value <- function(level) {
+    switch(level,
+           "None" = 0,
+           "Low" = 1,
+           "Median" = 5,
+           "High" = 10,
+           0)  # 默认值
+  }
+
+  # 辅助函数：生成序列
+  generate_sequence <- function(pattern, level, num_arms) {
+    if (pattern == "Equal") {
+      # Equal pattern: 所有arm使用相同的值
+      rep(level_to_value(level), num_arms)
+    } else {  # Unequal
+      # 从四个level中随机选择
+      sample(c(0, 1, 5, 10), num_arms, replace = TRUE)
+    }
+  }
+
+  # 观察Noise设置的变化
+  observe({
+    # 生成新的noise序列
+    new_noise <- generate_sequence(
+      input$noise_pattern,
+      input$noise_level,
+      input$num_arms
+    )
+    
+    # 更新noise序列
+    noise_sequence(new_noise)
+    
+    # 打印结果
+    cat("Noise sequence updated:\n")
+    cat("Pattern:", input$noise_pattern, "\n")
+    cat("Level:", input$noise_level, "\n")
+    cat("Values:", paste(new_noise, collapse = ", "), "\n\n")
+  })
+
+  # 观察Cost设置的变化
+  observe({
+    # 生成新的cost序列
+    new_cost <- generate_sequence(
+      input$cost_pattern,
+      input$cost_level,
+      input$num_arms
+    )
+    
+    # 更新cost序列
+    cost_sequence(new_cost)
+    
+    # 打印结果
+    cat("Cost sequence updated:\n")
+    cat("Pattern:", input$cost_pattern, "\n")
+    cat("Level:", input$cost_level, "\n")
+    cat("Values:", paste(new_cost, collapse = ", "), "\n\n")
+  })
+
+  # 当num_arms改变时也需要更新序列
+  observeEvent(input$num_arms, {
+    # 更新noise序列
+    new_noise <- generate_sequence(
+      input$noise_pattern,
+      input$noise_level,
+      input$num_arms
+    )
+    noise_sequence(new_noise)
+    
+    # 更新cost序列
+    new_cost <- generate_sequence(
+      input$cost_pattern,
+      input$cost_level,
+      input$num_arms
+    )
+    cost_sequence(new_cost)
+  })
+
+  observe({
+    if (input$noise_pattern == "Unequal") {
+      shinyjs::addCssClass("noise_level", "text-muted")
+      shinyjs::disable("noise_level")
+      updateSelectInput(session, "noise_level", selected = "None")
+    } else {
+      shinyjs::removeCssClass("noise_level", "text-muted")
+      shinyjs::enable("noise_level")
+    }
+  })
+
+  observe({
+    if (input$cost_pattern == "Unequal") {
+      shinyjs::addCssClass("cost_level", "text-muted")
+      shinyjs::disable("cost_level")
+      updateSelectInput(session, "cost_level", selected = "None")
+    } else {
+      shinyjs::removeCssClass("cost_level", "text-muted")
+      shinyjs::enable("cost_level")
+    }
+  })
+
+
+  observeEvent(input$num_forced_choice, {
+    # Validate input
+    new_value <- input$num_forced_choice
+    if (is.null(new_value) || is.na(new_value) || new_value < 0 ) {
+      updateNumericInput(session, "num_forced_choice", value = 0)
+    } else if (new_value > parameters$num_trials) {
+      updateNumericInput(session, "num_forced_choice", value = parameters$num_trials)
+    } else {
+      parameters$num_forced_choice <- new_value
+    }
+  })
+
+  # Ensure forced_choice does not exceed NUM_TRIALS
+  observe({
+    # 获取当前的num_trials值
+    max_allowed <- input$num_trials
+    
+    # 更新num_forced_choice的限制
+    updateNumericInput(session, "num_forced_choice",
+                      max = max_allowed,
+                      value = isolate({
+                        # 只在当前值超过新的最大值时才更新
+                        current_value <- input$num_forced_choice
+                        if (is.null(current_value) || current_value > max_allowed) {
+                          max_allowed
+                        } else {
+                          current_value
+                        }
+                      }))
+  })
+
+  # 修改reward matrix的生成逻辑
+  generate_final_reward_matrix <- function(base_matrix, noise_seq, cost_seq, reward_type) {
+    num_trials <- nrow(base_matrix)
+    num_arms <- ncol(base_matrix)
+    final_matrix <- base_matrix
+    
+    # 应用noise
+    for (arm in 1:num_arms) {
+      if (noise_seq[arm] > 0) {
+        # 生成噪声
+        noise <- rnorm(num_trials, mean = 0, sd = noise_seq[arm])
+        final_matrix[, arm] <- final_matrix[, arm] + noise
+      }
+    }
+    
+    # 应用cost
+    for (arm in 1:num_arms) {
+      if (cost_seq[arm] > 0) {
+        final_matrix[, arm] <- final_matrix[, arm] - cost_seq[arm]
+      }
+    }
+    
+    # 截断到合法范围
+    if (reward_type == "binary") {
+      final_matrix <- pmax(pmin(final_matrix, 100), 0) / 100  # 截断到[0,1]
+    } else {
+      final_matrix <- pmax(pmin(final_matrix, 100), 0)  # 截断到[0,100]
+    }
+    
+    return(final_matrix)
+  }
+
+  # 修改Update Demo按钮的处理逻辑
+  observeEvent(input$update_demo, {
+    # 设置随机种子
+    set.seed(input$seed)
+    
+    # 生成基础reward matrix
+    base_matrix <- summary_reward_distribution(
+      link_data(), 
+      state_data(), 
+      arm_data(), 
+      input$num_trials, 
+      input$num_arms
+    )
+    
+    # 获取当前的noise和cost序列
+    current_noise <- noise_sequence()
+    current_cost <- cost_sequence()
+    
+    # 生成最终的reward matrix
+    final_matrix <- generate_final_reward_matrix(
+      base_matrix,
+      current_noise,
+      current_cost,
+      input$reward_type
+    )
+    
+    # 更新reward matrix
+    reward_matrix(final_matrix)
+    
+    # 打印调试信息
+    cat("Final Reward Matrix generated:\n")
+    cat("Applied Noise:", paste(current_noise, collapse = ", "), "\n")
+    cat("Applied Cost:", paste(current_cost, collapse = ", "), "\n")
+  })
+
+  # 修改auto_update_trigger的处理
+  observeEvent(auto_update_trigger(), {
+    # 设置随机种子
+    set.seed(input$seed)
+    
+    # 生成基础reward matrix
+    base_matrix <- summary_reward_distribution(
+      link_data(), 
+      state_data(), 
+      arm_data(), 
+      input$num_trials, 
+      input$num_arms
+    )
+    
+    # 获取当前的noise和cost序列
+    current_noise <- noise_sequence()
+    current_cost <- cost_sequence()
+    
+    # 生成最终的reward matrix
+    final_matrix <- generate_final_reward_matrix(
+      base_matrix,
+      current_noise,
+      current_cost,
+      input$reward_type
+    )
+    
+    # 更新reward matrix
+    reward_matrix(final_matrix)
+  })
+
 }
 
 # Run App =====================================================================

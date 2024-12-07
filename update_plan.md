@@ -1,22 +1,19 @@
+
+默认 update
+
+指导语修改
+Interface修改
+
+game 不对称性实现
+
+game保存参数
+
 问卷
 
-forced设置 呈现 其他内容
-算法实现
-
-均等不均等√
-  联结分配情况 on feature
 
 
 
-保存参数 UI
 
-保存参数 game
-
-
-其他不对称性实现
-
-
-seed位置 forced
 
 
 打乱 图 刺激

@@ -22,7 +22,9 @@ ui <- fluidPage(
   fluidRow(
     column(4, numericInput("num_trials", "Number of Trials", value = 10, min = 1)),
     column(4, numericInput("num_arms", "Number of Arms", value = 5, min = 1)),
-    column(4, numericInput("seed", "Random Seed", value = 42, min = 1))
+    column(4, selectInput("feedback_version", "Feedback Version",
+                         choices = c("full", "contingent"),
+                         selected = "contingent"))
   ),
 
   # Additional Configuration Options
@@ -33,9 +35,7 @@ ui <- fluidPage(
     column(4, selectInput("cover_story", "Cover Story",
                          choices = c("social", "non-social"), 
                          selected = "non-social")),
-    column(4, selectInput("feedback_version", "Feedback Version",
-                         choices = c("full", "contingent"),
-                         selected = "contingent"))
+    column(4, numericInput("seed", "Seed (Only for UI Illustration)", value = 42, min = 1))
   ),
   
 
@@ -917,7 +917,28 @@ server <- function(input, output, session) {
                 "// Basic Parameters",
                 paste0("const NUM_TRIALS = ", input$num_trials, ";"),
                 paste0("const NUM_ARMS = ", input$num_arms, ";"),
-                paste0("const RANDOM_SEED = ", input$seed, ";"),
+                paste0("const REWARD_TYPE = '", input$reward_type, "';"),
+                paste0("const FEEDBACK_VERSION = '", input$feedback_version, "';"),
+                paste0("const COVER_STORY = '", input$cover_story, "';"),
+                "")
+      
+      # Add Asymmetric Configuration section
+      lines <- c(lines,
+                "// Asymmetry Configuration",
+                "const ASYMMETRY_CONFIG = {",
+                "  information: {",
+                paste0("    pattern: '", input$forced_pattern, "',"),
+                paste0("    numForcedChoice: ", input$num_forced_choice),
+                "  },",
+                "  noise: {",
+                paste0("    pattern: '", input$noise_pattern, "',"),
+                paste0("    level: '", input$noise_level, "',"),
+                "  },",
+                "  cost: {",
+                paste0("    pattern: '", input$cost_pattern, "',"),
+                paste0("    level: '", input$cost_level, "',"),
+                "  }",
+                "};",
                 "")
       
       # Add state variables section

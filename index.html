@@ -118,7 +118,7 @@ const debrief = {
 const instructions = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const text = instruction_texts[SOCIAL_VERSION];
+        const text = instruction_texts[COVER_STORY];
         const gapPercentage = 5;
         const totalGapWidth = gapPercentage * (NUM_ARMS - 1);
         const optionWidth_raw = (100 - totalGapWidth) / NUM_ARMS;
@@ -131,14 +131,14 @@ const instructions = {
             ${text.description.map(line => `<p>${line}</p>`).join('')}
             <p>You will be transported between ${NUM_CONTEXTS} different planets.</p>
             <p>${FEEDBACK_VERSION=="full" ? 
-                `You will see the outcomes of all ${SOCIAL_VERSION === 'social' ? 'aliens' : 'ores'} after each choice, whether or not you chose them.` : 
-                `You can only see the outcome of your chosen ${SOCIAL_VERSION === 'social' ? 'alien' : 'ore'} after each choice.`}</p>
+                `You will see the outcomes of all ${COVER_STORY === 'social' ? 'aliens' : 'ores'} after each choice, whether or not you chose them.` : 
+                `You can only see the outcome of your chosen ${COVER_STORY === 'social' ? 'alien' : 'ore'} after each choice.`}</p>
             ${text.choice_text.map(line => `<p>${line}</p>`).join('')}
             <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_ARMS).fill().map((_, i) => `
                 <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
                     <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
-                    <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${i+1}</strong></p>
+                    <p class='small'><strong>${COVER_STORY === 'social' ? 'Alien' : 'Ore'} ${i+1}</strong></p>
                 </div>
                 `).join('')}
             </div>
@@ -148,7 +148,7 @@ const instructions = {
     data: function() {
         return {
             tag: 'instructions',
-            version: SOCIAL_VERSION
+            version: COVER_STORY
         };
     }
 };
@@ -251,7 +251,7 @@ function generateArmImageSequence(armMatrices, socialVersion) {
 
   return armSequence;
 }
-const IMG_ARM = generateArmImageSequence(armMatrices, SOCIAL_VERSION);
+const IMG_ARM = generateArmImageSequence(armMatrices, COVER_STORY);
 console.log(IMG_ARM);
 
 // Generate context ID sequence from Planet matrix
@@ -478,7 +478,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                     <p><strong>${NAME_CONTEXT[trialIndex]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
                     <p>Remaining Days: ${remainingTrials}</p>
-                    <p style="color: red; font-weight: bold;">Please select ${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
+                    <p style="color: red; font-weight: bold;">Please select ${COVER_STORY === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
                 </div>
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_ARMS).fill().map((_, i) => `
@@ -520,7 +520,7 @@ function createForcedChoiceFeedback(trialIndex, forcedChoice) {
         if (!lastTrial.valid_choice) {
             return `
                 <p style="color: red; font-weight: bold;">Invalid choice!</p>
-                <p>You must select ${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
+                <p>You must select ${COVER_STORY === 'social' ? 'Alien' : 'Ore'} ${forcedChoice + 1}</p>
                 <p>[Press any key to try again]</p>
             `;
         }
@@ -605,7 +605,7 @@ function createFeedback(trialIndex) {
                                 <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
                                     <div style='${isSelected ? "border: 3px solid #333333; padding: 5px;" : ""}'>
                                         <img src='${img}' style='width: 100%; object-fit: contain;'></img>
-                                        <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 
+                                        <p class='small'><strong>${COVER_STORY === 'social' ? 
                                             `Alien ${index + 1}` : 
                                             `Ore ${index + 1}`}</strong></p>
                                         ${showReward ? `<p class='small' style='${isSelected ? 'font-weight: bold;' : 'color: #666; font-style: italic;'}'>
@@ -617,7 +617,7 @@ function createFeedback(trialIndex) {
                         }).join('')}
                     </div>
                     <div style='text-align: center; margin-top: 20px;'>
-                        <p>${SOCIAL_VERSION === 'social' ? 
+                        <p>${COVER_STORY === 'social' ? 
                             `You chose Alien ${choice + 1}` :
                             `You chose Ore ${choice + 1}`}</p>
                         <p>You gained ${lastTrial.reward} Aetherium in this round</p>
@@ -639,10 +639,10 @@ const probabilityRatings = IMG_ARM.map((image, index) => {
         stimulus: `
             <div style='margin: 2em 0;'>
                 <img src='${image}' style='width: 30%; height: 30%; object-fit: contain;'></img>
-                <p><strong>${SOCIAL_VERSION === 'social' ? 
+                <p><strong>${COVER_STORY === 'social' ? 
                     `How generous is Alien ${index + 1}?` : 
                     `How rewarding is Ore ${index + 1}?`}</strong></p>
-                <p style='font-size: 0.8em; color: #666;'>${SOCIAL_VERSION === 'social' ?
+                <p style='font-size: 0.8em; color: #666;'>${COVER_STORY === 'social' ?
                     '(0 = Very stingy, 100 = Very generous)' :
                     '(0 = Very bad, 100 = Very good)'}</p>
             </div>

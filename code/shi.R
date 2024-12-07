@@ -97,11 +97,19 @@ ui <- fluidPage(
     column(6,
            h4("State Variables Configuration"),
            fluidRow(
-             column(3, textInput("state_name", "Name")),
-             column(3, numericInput("state_levels", "# Levels", value = 1, min = 1)),
-             column(3, selectInput("state_pattern", "Pattern", choices = c("Loop", "Shuffle", "Random"))),
-             column(3, div(style = "margin-top: 25px;", 
-                  actionButton("add_state", "Add", class = "btn-info")))
+             column(3, 
+                    textInput("state_name", "Name")),
+             column(3, 
+                    numericInput("state_levels", "Levels", 
+                               value = 1, min = 1)),
+             column(3, 
+                    selectInput("state_pattern", "Pattern", 
+                              choices = c("Shuffle", "Loop", "Random"))),
+             column(3, 
+                    div(style = "margin-top: 25px;", 
+                        actionButton("add_state", "Update", 
+                                   class = "btn-info btn-sm",
+                                   style = "width: 60px;")))
            ),
            DTOutput("state_table")
     ),
@@ -110,11 +118,19 @@ ui <- fluidPage(
     column(6,
            h4("Arm Variables Configuration"),
            fluidRow(
-             column(3, textInput("arm_name", "Name")),
-             column(3, numericInput("arm_levels", "# Levels", value = 1, min = 1)),
-             column(3, selectInput("arm_pattern", "Pattern", choices = c("Loop", "Shuffle", "Random"))),
-             column(3, div(style = "margin-top: 25px;",
-                  actionButton("add_arm", "Add", class = "btn-info")))
+             column(3, 
+                    textInput("arm_name", "Name")),
+             column(3, 
+                    numericInput("arm_levels", "Levels", 
+                               value = 1, min = 1)),
+             column(3, 
+                    selectInput("arm_pattern", "Pattern", 
+                              choices = c("Shuffle", "Loop", "Random"))),
+             column(3, 
+                    div(style = "margin-top: 25px;", 
+                        actionButton("add_arm", "Update", 
+                                   class = "btn-info btn-sm",
+                                   style = "width: 60px;")))
            ),
            DTOutput("arm_table")
     )
@@ -126,11 +142,14 @@ ui <- fluidPage(
            h4("Reward Distribution Configuration"),
            fluidRow(
              column(3, 
-                    selectInput("link_state", "State Variable", choices = NULL),
+                    selectInput("link_state", "State Variable", 
+                            choices = "Time",  # 初始只有Time选项
+                            selected = "Time"),
                     style = "padding-right: 5px; width: 21%;"),
              column(3, 
                     selectInput("link_state_function", "State Distribution", 
-                              choices = c("Identical", "Independent", "Monotonic", "Random Walk")),
+                            choices = "Identical",  # 初始只有Identical选项
+                            selected = "Identical"),
                     style = "padding-right: 5px; width: 21%;"),
              column(1,
                     div(style = "margin-top: 25px; width: 100%; text-align: center;",
@@ -382,16 +401,16 @@ server <- function(input, output, session) {
 
   # Initialize State and Arm Data with Default Rows
   state_data <- reactiveVal(data.frame(
-    Name = c("Time"),
-    Levels = c(10),  # Time will be updated by num_trials
-    Pattern = c("Loop"),
+    Name = c("Time", "Planet"),
+    Levels = c(10, 1),  # Time会被num_trials更新
+    Pattern = c("Loop", "Shuffle"),
     stringsAsFactors = FALSE
   ))
   
   arm_data <- reactiveVal(data.frame(
-    Name = c("Index"),
-    Levels = c(5),  # Index will be updated by num_arms
-    Pattern = c("Loop"),
+    Name = c("Index", "Color", "Shape"),
+    Levels = c(5, 1, 1),  # Index会被num_arms更新
+    Pattern = c("Loop", "Shuffle", "Shuffle"),
     stringsAsFactors = FALSE
   ))
   
@@ -407,17 +426,22 @@ server <- function(input, output, session) {
   
   # Add new reactive values to track link state
   observe({
-    # Get current selections
+    # 在初始化时就设置正确的状态
+    if (is.null(input$link_distributions)) {
+      updateActionButton(session, "link_distributions", value = 0)
+    }
+    
+    # 获取当前选择
     current_state <- input$link_state
     current_arm <- input$link_arm
     
-    # Get available choices
+    # 获取可用选项
     state_choices <- state_data()$Name
     arm_choices <- arm_data()$Name
     
-    # Check if distributions are linked
+    # 检查是否链接
     if (input$link_distributions %% 2 == 1) {
-      # Linked state - normal dropdown behavior
+      # 链接状态 - 正常下拉行为
       updateSelectInput(session, "link_state", 
                        choices = state_choices,
                        selected = if (current_state %in% state_choices) current_state else state_choices[1])
@@ -425,20 +449,26 @@ server <- function(input, output, session) {
                        choices = c("Independent", "Monotonic", "Random Walk"),
                        selected = input$link_state_function)
     } else {
-      # Unlinked state - static "Time" and "Identical"
+      # 断开状态 - 静态"Time"和"Identical"
       updateSelectInput(session, "link_state",
                        choices = "Time",
                        selected = "Time")
       updateSelectInput(session, "link_state_function",
                        choices = "Identical",
                        selected = "Identical")
+      
+      # 添加灰色样式
+      shinyjs::addCssClass("link_state", "text-muted")
+      shinyjs::addCssClass("link_state_function", "text-muted")
+      shinyjs::disable("link_state")
+      shinyjs::disable("link_state_function")
     }
     
-    # Always update arm dropdown
+    # 总是更新arm下拉菜单
     updateSelectInput(session, "link_arm", 
                      choices = arm_choices,
                      selected = if (current_arm %in% arm_choices) current_arm else arm_choices[1])
-  }, priority = 1000)
+  }, priority = 1000)  # 高优先级确保在启动时运行
   
   # Initialize the default values to match input values
   observe({
@@ -462,8 +492,13 @@ server <- function(input, output, session) {
     })
   }, priority = 1000)  # High priority to ensure it runs at startup
   
-  # Add State Variable with duplicate check
+  # Add/Update State Variable with protection for Time
   observeEvent(input$add_state, {
+    # 如果尝试修改Time，直接返回
+    if (input$state_name == "Time") {
+      return()
+    }
+    
     new_state <- data.frame(
       Name = input$state_name,
       Levels = input$state_levels,
@@ -476,6 +511,10 @@ server <- function(input, output, session) {
     duplicate_idx <- which(current_data$Name == input$state_name)
     
     if (length(duplicate_idx) > 0) {
+      # 如果是Time行，不允许修改
+      if (current_data$Name[duplicate_idx] == "Time") {
+        return()
+      }
       # Replace existing row
       current_data[duplicate_idx, ] <- new_state
       state_data(current_data)
@@ -486,8 +525,13 @@ server <- function(input, output, session) {
     updateSelectInput(session, "link_state", choices = state_data()$Name)
   })
   
-  # Add Arm Variable with duplicate check
+  # Add/Update Arm Variable with protection for Index
   observeEvent(input$add_arm, {
+    # 如果尝试修改Index，直接返回
+    if (input$arm_name == "Index") {
+      return()
+    }
+    
     new_arm <- data.frame(
       Name = input$arm_name,
       Levels = input$arm_levels,
@@ -500,6 +544,10 @@ server <- function(input, output, session) {
     duplicate_idx <- which(current_data$Name == input$arm_name)
     
     if (length(duplicate_idx) > 0) {
+      # 如果是Index行，不允许修改
+      if (current_data$Name[duplicate_idx] == "Index") {
+        return()
+      }
       # Replace existing row
       current_data[duplicate_idx, ] <- new_arm
       arm_data(current_data)
@@ -702,9 +750,17 @@ server <- function(input, output, session) {
   output$state_table <- renderDT({
     df <- state_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
-      if (i <= 1) return("") # Default row (Time)
-      sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
-              df$Name[i])
+      if (df$Name[i] == "Time") {
+        # Time行完全不可修改
+        return("")
+      } else if (df$Name[i] == "Planet") {
+        # Planet行可以修改但不能删除
+        return("")
+      } else {
+        # 其他行可以删除
+        return(sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+                      df$Name[i]))
+      }
     })
     
     datatable(
@@ -724,6 +780,18 @@ server <- function(input, output, session) {
           list(
             targets = ncol(df) - 1,
             className = 'dt-center'
+          ),
+          # Time行所有列都不可编辑
+          list(
+            targets = "_all",
+            render = JS(
+              "function(data, type, row, meta) {",
+              "  if (row[0] === 'Time') {",
+              "    return '<span class=\"text-muted\">' + data + '</span>';",
+              "  }",
+              "  return data;",
+              "}"
+            )
           )
         ),
         initComplete = JS(
@@ -738,9 +806,17 @@ server <- function(input, output, session) {
   output$arm_table <- renderDT({
     df <- arm_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
-      if (i <= 1) return("") # Default row (Index)
-      sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
-              df$Name[i])
+      if (df$Name[i] == "Index") {
+        # Index行完全不可修改
+        return("")
+      } else if (df$Name[i] %in% c("Color", "Shape")) {
+        # Color和Shape行可以修改但不能删除
+        return("")
+      } else {
+        # 其他行可以删除
+        return(sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+                      df$Name[i]))
+      }
     })
     
     datatable(
@@ -760,6 +836,18 @@ server <- function(input, output, session) {
           list(
             targets = ncol(df) - 1,
             className = 'dt-center'
+          ),
+          # Index行所有列都不可编辑
+          list(
+            targets = "_all",
+            render = JS(
+              "function(data, type, row, meta) {",
+              "  if (row[0] === 'Index') {",
+              "    return '<span class=\"text-muted\">' + data + '</span>';",
+              "  }",
+              "  return data;",
+              "}"
+            )
           )
         ),
         initComplete = JS(
@@ -1378,39 +1466,3 @@ server <- function(input, output, session) {
 
 shinyApp(ui, server)
 
-
-#json
-
-#实验程序
-#不确定性：显示
-
-
-
-#其他部分的选择
-
-# 组合图片 UI
-
-
-
-
-
-#改名：Position和Trial
-#Increasing 线性/对称 机单边
-#shuffle: 几个
-#刻度level:order还是普通categorical
-#Random 变成shuffle
-#Pattern
-
-
-
-# 整理程序
-
-
-#随机性
-#多个矩阵的时候的随机处理
-
-#删除的bug
-
-
-#Reactive
-#cost

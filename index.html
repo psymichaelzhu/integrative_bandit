@@ -35,17 +35,6 @@ const NAME_PLANET = [
   "Pyra"
 ];
 
-// Check if Planet, Color and Shape exist in STATE_VARIABLES and ARM_VARIABLES, if not create them (To ensure the loading success)
-if (!STATE_VARIABLES.Planet) {
-    STATE_VARIABLES.Planet = {levels: 1, pattern: 'Loop'};
-}
-if (!ARM_VARIABLES.Color) {
-    ARM_VARIABLES.Color = {levels: 1, pattern: 'Loop'};
-}
-if (!ARM_VARIABLES.Shape) {
-    ARM_VARIABLES.Shape = {levels: 1, pattern: 'Loop'};
-}
-
 const NUM_CONTEXTS = STATE_VARIABLES.Planet.levels; 
 
 // 1. Initialize --------------------------------------------------------------

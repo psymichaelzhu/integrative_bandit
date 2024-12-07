@@ -1,39 +1,52 @@
+Time 修改
 
-默认 update
+默认灰色
+
+不显示
+  计算逻辑
+
+
+大写
+
+
+
+实验里的计算逻辑
+
+
 
 指导语修改
-Interface修改
-
-game 不对称性实现
-
-game保存参数
-
-问卷
-
-
-
-
-
+Interface修改： 不对称
 
 
 打乱 图 刺激
 
 
-允许自定义：覆盖
+game保存参数
 
 
 
-**document**
 
 
 incentive (paper)
 instruction
 
 
----
-**服务器**
+
+添加
+问卷
 
 
+装载-服务器
+
+
+
+文档
+
+
+
+
+
+优化
 
 复用
 复用：图性质
@@ -44,60 +57,8 @@ instruction
 - 服务器
 
 
-保存参数: 提前存
+保存参数: 提前存 提前加载
 id 不同的csv
-
----
-# UI
-
-## bug
-shiny闪退
-
-
-
-
-
-
-
-
-问卷
-
-
-
-
-
-- shuffle的话：随机之后选择
-
-
-
-# trial: /next 1
-- 不对称性的补充 295 363
-    不确定性
-        对应的参数
-    forced choice: 数量bug
-    成本
-    奖励
-新增加两个内容：
-1. uncertainty: uncertainty是按照variable和distribution生成一个uncertainty序列 比如variable=index distribution=independent
-就是说uncertainty在index之间不相同
-
-uncertainty反映的是一个选项的噪音程度(numeric reward的奖励会反映在两个方面：
-1. 对reward_matrix每一个arm的均值进行一定的substraction
-2. 在trial阶段
-
-
-
-
-
-扩展不对称性：
-trial:
-    不确定性
-    成本
-    奖励
-feedback:
-    信息
-    成本
-forced choice
 
 
 
@@ -111,87 +72,4 @@ forced choice
 
 
 
-
-
-
-
-
-// Generate context image sequence based on Planet matrix
-function generateContextImageSequence(stateMatrices) {
-  // Get Planet matrix
-  const planetMatrix = stateMatrices.Planet;
-  if (!planetMatrix) {
-      console.error("Planet matrix not found in stateMatrices");
-      return [];
-  }
-
-  // Convert one-hot encoding to planet indices
-  const contextSequence = planetMatrix.map(trial => {
-      // Find the index of 1 in the trial array (convert to 1-based index)
-      const planetIndex = trial.indexOf(1) + 1;
-      // Generate image path
-      return `img/Planet/${planetIndex}.png`;
-  });
-
-  return contextSequence;
-}
-const IMG_CONTEXT = generateContextImageSequence(stateMatrices);
-const NAME_PLANET = [
-"Nova",
-"Solis",
-"Aether",
-"Zephyr",
-"Lumis",
-"Orion",
-"Astra",
-"Vora",
-"Kryos",
-"Pyra"
-];
-const NAME_CONTEXT = IMG_CONTEXT.map((_, index) => NAME_PLANET[index]);
-console.log(NAME_CONTEXT);
-console.log(IMG_CONTEXT);
-
-
-const contextNames = [
-"Nova",
-"Solis",
-"Aether",
-"Zephyr",
-"Lumis",
-"Orion",
-"Astra",
-"Vora",
-"Kryos",
-"Pyra"
-];
-
-
-
-
-
-//load images (context and arm)
-function generateImagePath(imageType, shapeColorPair) {
-  const [shape, color] = shapeColorPair;
-  const folder = imageType === 'arm' ? `${SOCIAL_VERSION}/arm` : 'context';
-  return `img/${folder}/${shape}-${color}.png`;
-}
-function shuffleArray(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-  }
-  return array;
-}
-
-// Generate random context sequence
-function generateContextSequence(numTrials, numContexts) {
-  let sequence = [];
-  for (let i = 0; i < numTrials; i++) {
-      sequence.push(Math.floor(Math.random() * numContexts));
-  }
-  return sequence;
-}
-// Generate context sequence for all trials
-const CONTEXT_INDICES = generateContextSequence(NUM_TRIALS + NUM_FORCED_TRIALS, NUM_CONTEXTS);
 

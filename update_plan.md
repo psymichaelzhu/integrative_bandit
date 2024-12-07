@@ -1,12 +1,27 @@
+bug
+
+update
+崩坏
+
+检查代码
+
+noise这些仅仅对numeric有效
+
+
+
 Time 修改
-
 默认灰色
-
 不显示
   计算逻辑
+模式只independent和identical
 
 
 大写
+
+
+
+
+
 
 
 
@@ -21,14 +36,26 @@ Interface修改： 不对称
 打乱 图 刺激
 
 
+incentive (paper)
+instruction
+
+
+
+
+
 game保存参数
 
 
 
 
 
-incentive (paper)
-instruction
+
+
+
+装载-服务器
+
+
+文档
 
 
 
@@ -36,11 +63,10 @@ instruction
 问卷
 
 
-装载-服务器
 
 
 
-文档
+
 
 
 

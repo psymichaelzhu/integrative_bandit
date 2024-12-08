@@ -3,6 +3,7 @@
 <html>
 <head>
     <title> Integrative Bandit </title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
     <script src="js/jspsych.js"></script>
     <script src="js/plugin-html-keyboard-response.js"></script>
     <script src="js/plugin-image-keyboard-response.js"></script>
@@ -10,16 +11,285 @@
     <script src="js/plugin-html-slider-response.js"></script>
     <script src="instructions.js"></script>
     <script src="MAB.js"></script>
+    <script src="config/Bandit_config_20241202_044245.js"></script>
     <link href="https://unpkg.com/jspsych@7.3.3/css/jspsych.css" rel="stylesheet" type="text/css" />
+    <script src="jatos.js"></script>
 </head>
 <body>
 </body>
 <script>
 
 // variables are loaded from MAB.js
+const NUM_CONTEXTS = STATE_VARIABLES.Planet.levels; 
+
+// 1. Initialize --------------------------------------------------------------
+const jsPsych = initJsPsych({
+    on_trial_start: jatos.addAbortButton,
+    on_finish: function() {
+        // Get all data and ignore multiple columns
+        var all_data = jsPsych.data.get()
+            .ignore([
+            'stimulus',
+            'trial_type',
+            'internal_node_id',
+            'view_history',
+            'time_elapsed',
+            'response_label',
+            'slider_start',
+            'success',
+            'trial_index',
+            'plugin_version',
+            'total_reward'
+        ])
+        .filter([{tag: 'trial'}, {tag: 'rating'}]);
+
+        // Convert data to CSV format
+        const csvData = all_data.csv();
+        
+        // Submit results to JATOS
+        jatos.submitResultData(csvData)
+            .then(() => {
+                // After successful submission, end the study
+                jatos.endStudy();
+            })
+            .catch(err => {
+                console.error("Error submitting results:", err);
+                // Optionally provide fallback to local save if JATOS submission fails
+                const filename = `bandit_data_${Date.now()}.csv`;
+                all_data.localSave('csv', filename);
+            });
+    },
+    show_progress_bar: true
+});
+const enterFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: true,
+    message: '<p>The experiment will start in fullscreen mode.</p><p>Click the button below to enter fullscreen mode.</p>',
+    button_label: 'Enter Fullscreen',
+    data: {
+        tag: 'enter_fullscreen'
+    }
+};
+const exitFullscreen = {
+    type: jsPsychFullscreen,
+    fullscreen_mode: false,
+    data: {
+        tag: 'exit_fullscreen'
+    }
+};
+const welcome = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<h1>Welcome to the ${NAME}</h1><p>[Press any key to continue]</p>`,
+    data: {
+        tag: 'welcome'
+    } 
+};
+const debrief = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const totalReward = jsPsych.data.get().select('reward').sum();
+        return `
+            <h2>Experiment finished</h2>
+            <p>Your total score: ${totalReward}</p>
+            <p>Your total payoff: $${Math.round(totalReward*0.01*100)/100}</p>
+            <p>Thank you for your participation!</p>
+            <p>[Press any key to exit]</p>
+        `;
+    },
+    data: {
+        tag: 'debrief'
+    }
+};
+const instructions = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const text = instruction_texts[SOCIAL_VERSION];
+        const gapPercentage = 5;
+        const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
+        const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
+        const optionWidth = Math.min(10, optionWidth_raw);
+        const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
+             
+        return `    
+            <p><b>${text.title}</b></p>
+            <p>Your supplement is limited and can only stay for ${NUM_TRIALS+NUM_FORCED_TRIALS} days.</p>
+            ${text.description.map(line => `<p>${line}</p>`).join('')}
+            <p>You will be transported between ${NUM_CONTEXTS} different planets.</p>
+            <p>${FEEDBACK_VERSION=="full" ? 
+                `You will see the outcomes of all ${SOCIAL_VERSION === 'social' ? 'aliens' : 'ores'} after each choice, whether or not you chose them.` : 
+                `You can only see the outcome of your chosen ${SOCIAL_VERSION === 'social' ? 'alien' : 'ore'} after each choice.`}</p>
+            ${text.choice_text.map(line => `<p>${line}</p>`).join('')}
+            <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
+                ${Array(NUM_OPTIONS).fill().map((_, i) => `
+                <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
+                    <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
+                    <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${i+1}</strong></p>
+                </div>
+                `).join('')}
+            </div>
+            <p>[Press any key to begin]</p>
+        `;
+    },
+    data: function() {
+        return {
+            tag: 'instructions',
+            version: SOCIAL_VERSION
+        };
+    }
+};
 
 
-// 1. Stimuli generation --------------------------------------------------------------
+// 2. Stimuli generation --------------------------------------------------------------
+
+// variable matrix
+function createVariableMatrices(variables, numTrials, numArms, isStateVariable = true) {
+    let matrices = {};
+    
+    // Helper function to generate sequence based on pattern
+    function generateSequence(levels, pattern, length) {
+        switch(pattern) {
+            case 'Loop':
+                // Create repeating sequence
+                return Array.from({length: length}, (_, i) => i % levels);
+            case 'Shuffle':
+                // Create shuffled sequence
+                let baseSequence = Array.from({length: levels}, (_, i) => i);
+                let shuffled = [];
+                while (shuffled.length < length) {
+                    let temp = [...baseSequence];
+                    for (let i = temp.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [temp[i], temp[j]] = [temp[j], temp[i]];
+                    }
+                    shuffled.push(...temp);
+                }
+                return shuffled.slice(0, length);
+            case 'Random':
+                // Random assignment with equal probability
+                return Array.from({length: length}, () => Math.floor(Math.random() * levels));
+            default:
+                console.warn(`Unknown pattern: ${pattern}, falling back to Loop`);
+                return Array.from({length: length}, (_, i) => i % levels);
+        }
+    }
+
+    // Process each variable
+    for (let varName in variables) {
+        const config = variables[varName];
+        
+        // Determine matrix dimensions based on variable type
+        const matrixRows = isStateVariable ? numTrials : numArms;
+        
+        // Generate sequence
+        const sequence = generateSequence(
+            config.levels,
+            config.pattern,
+            matrixRows
+        );
+
+        // Create one-hot encoding matrix
+        const matrix = Array(matrixRows).fill().map(() => Array(config.levels).fill(0));
+        
+        // Fill matrix based on sequence
+        sequence.forEach((value, index) => {
+            if (value >= 0 && value < config.levels) {  // Validate value
+                matrix[index][value] = 1;
+            } else {
+                console.error(`Invalid value ${value} for variable ${varName}`);
+            }
+        });
+
+        matrices[varName] = matrix;
+    }
+
+    return matrices;
+}
+
+const stateMatrices = createVariableMatrices(STATE_VARIABLES, NUM_TRIALS, NUM_OPTIONS, true);  // State variables
+console.log(stateMatrices); 
+const armMatrices = createVariableMatrices(ARM_VARIABLES, NUM_TRIALS, NUM_OPTIONS, false);     // Arm variables
+console.log(armMatrices);
+
+// Generate context image sequence based on Planet matrix
+function generateContextImageSequence(stateMatrices) {
+    // Get Planet matrix
+    const planetMatrix = stateMatrices.Planet;
+    if (!planetMatrix) {
+        console.error("Planet matrix not found in stateMatrices");
+        return [];
+    }
+
+    // Convert one-hot encoding to planet indices
+    const contextSequence = planetMatrix.map(trial => {
+        // Find the index of 1 in the trial array (convert to 1-based index)
+        const planetIndex = trial.indexOf(1) + 1;
+        // Generate image path
+        return `img/Planet/${planetIndex}.png`;
+    });
+
+    return contextSequence;
+}
+const IMG_CONTEXT = generateContextImageSequence(stateMatrices);
+const NAME_PLANET = [
+  "Mercury",
+  "Venus",
+  "Earth",
+  "Mars",
+  "Jupiter",
+  "Saturn",
+  "Uranus",
+  "Vora",
+  "Kryos",
+  "Pyra"
+];
+const NAME_CONTEXT = IMG_CONTEXT.map((_, index) => NAME_PLANET[index]);
+console.log(NAME_CONTEXT);
+console.log(IMG_CONTEXT);
+
+
+const contextNames = [
+  "Mercury",
+  "Venus",
+  "Earth",
+  "Mars",
+  "Jupiter",
+  "Saturn",
+  "Uranus",
+  "Vora",
+  "Kryos",
+  "Pyra"
+];
+
+
+// Generate arm image sequence based on Color and Shape matrix
+function generateArmImageSequence(armMatrices, socialVersion) {
+    // Get Color and Shape matrices
+    const colorMatrix = armMatrices.Color;
+    const shapeMatrix = armMatrices.Shape;
+    
+    if (!colorMatrix || !shapeMatrix) {
+        console.error("Color or Shape matrix not found in armMatrices");
+        return [];
+    }
+
+    // Convert one-hot encoding to indices for each arm
+    const armSequence = colorMatrix.map((colorRow, armIndex) => {
+        // Get color index (1-based)
+        const colorIndex = colorRow.indexOf(1) + 1;
+        // Get shape index (1-based)
+        const shapeIndex = shapeMatrix[armIndex].indexOf(1) + 1;
+        
+        // Generate image path based on social version
+        const folder = socialVersion === 'social' ? 'social' : 'nonsocial';
+        return `img/${folder}/arm/${shapeIndex}-${colorIndex}.png`;
+    });
+
+    return armSequence;
+}
+const IMG_ARM = generateArmImageSequence(armMatrices, SOCIAL_VERSION);
+console.log(IMG_ARM);
+
+
 //load images (context and arm)
 function generateImagePath(imageType, shapeColorPair) {
     const [shape, color] = shapeColorPair;
@@ -51,18 +321,7 @@ function generateUniqueContextPairs(numPairs) {
     return pairs;
 }
 const contextPairs = generateUniqueContextPairs(NUM_CONTEXTS);
-const contextNames = shuffleArray([
-  "Nova",
-  "Solis",
-  "Aether",
-  "Zephyr",
-  "Lumis",
-  "Orion",
-  "Astra",
-  "Vora",
-  "Kryos",
-  "Pyra"
-]);
+
 // Generate random context sequence
 function generateContextSequence(numTrials, numContexts) {
     let sequence = [];
@@ -79,146 +338,187 @@ const unshuffledimages = IMAGE_INDICES.slice(0, NUM_OPTIONS).map(pair =>
     generateImagePath('arm', pair)
 );
 const images = shuffleArray([...unshuffledimages]);
-// Instructions
-const instructions = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const text = instruction_texts[SOCIAL_VERSION];
-        const gapPercentage = 5;
-        const totalGapWidth = gapPercentage * (NUM_OPTIONS - 1);
-        const optionWidth_raw = (100 - totalGapWidth) / NUM_OPTIONS;
-        const optionWidth = Math.min(10, optionWidth_raw);
-        const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;
-             
-        return `    
-            <p><b>${text.title}</b></p>
-            <p>Your supplement is limited and can only stay for ${NUM_TRIALS+NUM_FORCED_TRIALS} days.</p>
-            ${text.description.map(line => `<p>${line}</p>`).join('')}
-            <p>You will be transported between ${NUM_CONTEXTS} different planets.</p>
-            <p>${FEEDBACK_VERSION=="full" ? 
-                `You will see the outcomes of all ${SOCIAL_VERSION === 'social' ? 'aliens' : 'ores'} after each choice, whether or not you chose them.` : 
-                `You can only see the outcome of your chosen ${SOCIAL_VERSION === 'social' ? 'alien' : 'ore'} after each choice.`}</p>
-            ${text.choice_text.map(line => `<p>${line}</p>`).join('')}
-            <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
-                ${Array(NUM_OPTIONS).fill().map((_, i) => `
-                <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
-                    <img src='${images[i]}' style='width: 100%;'></img>
-                    <p class='small'><strong>${SOCIAL_VERSION === 'social' ? 'Alien' : 'Ore'} ${i+1}</strong></p>
-                </div>
-                `).join('')}
-            </div>
-            <p>[Press any key to begin]</p>
-        `;
-    },
-    data: function() {
-        return {
-            tag: 'instructions',
-            version: SOCIAL_VERSION
-        };
-    }
-};
 
-// 2. Reward generation --------------------------------------------------------------
 
-// Generate base reward matrix from reward parameters
-function generateBaseMatrix() {
-    let baseMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        baseMatrix.push([...REWARD_PARAMETERS]); 
+// 3. Reward generation --------------------------------------------------------------
+// Generate reward matrix based on varaible matrix and distribution link matrix
+
+// Generate sequences based on distribution type
+function generateSequence(levels, distributionType) {
+    switch(distributionType) {
+        case 'Identical':
+            const value = Math.random() * 100;
+            return Array(levels).fill(value);
+        
+        case 'Independent':
+            return Array(levels).fill().map(() => Math.random() * 100);
+        
+        case 'Monotonic':
+            const bounds = [Math.random() * 100, Math.random() * 100].sort((a, b) => a - b);
+            return Array.from({length: levels}, (_, i) => 
+                bounds[0] + (i / (levels - 1)) * (bounds[1] - bounds[0])
+            );
+        
+        case 'Random Walk':
+            const values = new Array(levels);
+            values[0] = 20 + Math.random() * 60; // Start between 20-80
+            
+            for(let i = 1; i < levels; i++) {
+                const step = (Math.random() * 20) - 10; // Step between -10 and +10
+                values[i] = Math.max(0, Math.min(100, values[i-1] + step));
+            }
+            return values;
     }
-    return baseMatrix;
-}
-// structural bandit
-// Generate context effect matrix based on context sequence
-function generateContextMatrix() {
-    // First create matrix matching context sequence shape
-    let contextMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        let row = [];
-        const contextIndex = CONTEXT_INDICES[i];
-        // For each arm, apply context-specific modifier
-        for (let j = 0; j < NUM_OPTIONS; j++) {
-            // Example context effect: +0.1 for first context, -0.1 for second context
-            const contextEffect = contextIndex === 0 ? 1 : 0;//修改mapping
-            //matrix
-            row.push(contextEffect);
-        }
-        contextMatrix.push(row);
-    }
-    return contextMatrix;
 }
 
-// Generate trial effect matrix
-function generateTrialMatrix() {
-    let trialMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        let row = [];
-        for (let j = 0; j < NUM_OPTIONS; j++) {
-            // Example trial effect: small linear decrease over time
-            const trialEffect = -0.001 * i;
-            row.push(trialEffect);
-        }
-        trialMatrix.push(row);
-    }
-    return trialMatrix;
-}
-
-//限制在0-1
-// Combine all matrices
-function combineMatrices() {
-    const base = generateBaseMatrix();
-    const context = generateContextMatrix();
-    const trial = generateTrialMatrix();
+// Create distribution matrix based on interaction type
+function createDistributionMatrix(stateVariable, armVariable, stateDistribution, armDistribution, interaction) {
+    const stateLevels = STATE_VARIABLES[stateVariable].levels;
+    const armLevels = ARM_VARIABLES[armVariable].levels;
     
-    let finalMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        let row = [];
-        for (let j = 0; j < NUM_OPTIONS; j++) {
-            // Combine effects and ensure probability stays between 0 and 1
-            const probability = Math.min(1, Math.max(0, 
-                base[i][j] + context[i][j] + trial[i][j]
-            ));
-            row.push(probability);
+    // Initialize matrix with correct dimensions (stateLevels × armLevels)
+    let distributionMatrix = Array(stateLevels).fill().map(() => 
+        Array(armLevels).fill(0)
+    );
+    
+    if (interaction === '×') {
+        // For multiplicative interaction
+        const armSeq = generateSequence(armLevels, armDistribution);
+        
+        // Generate state sequences for each arm value
+        for (let stateIndex = 0; stateIndex < stateLevels; stateIndex++) {
+            for (let armIndex = 0; armIndex < armLevels; armIndex++) {
+                Math.seedrandom(armSeq[armIndex].toString());
+                const stateSeq = generateSequence(stateLevels, stateDistribution);
+                distributionMatrix[stateIndex][armIndex] = stateSeq[stateIndex];
+            }
         }
-        finalMatrix.push(row);
+    } else {
+        // For additive interaction
+        const armSeq = generateSequence(armLevels, armDistribution);
+        // Fill matrix - repeat arm sequence for each state
+        for (let stateIndex = 0; stateIndex < stateLevels; stateIndex++) {
+            distributionMatrix[stateIndex] = [...armSeq];
+        }
     }
-    return finalMatrix;
+    
+    return distributionMatrix;
 }
 
-const rewardProbabilityMatrix = combineMatrices();
+// Generate reward matrix from all distribution links
+function generateRewardMatrix() {
+    // Initialize final matrix
+    let finalMatrix = Array(NUM_TRIALS).fill().map(() => 
+        Array(NUM_OPTIONS).fill(0)
+    );
+    
+    // Process each distribution link
+    DISTRIBUTION_LINKS.forEach(link => {
+        // Create distribution matrix
+        const distMatrix = createDistributionMatrix(
+            link.stateVariable,
+            link.armVariable,
+            link.stateDistribution,
+            link.armDistribution,
+            link.interaction
+        );
+        console.log('Distribution Matrix:', distMatrix);
+        
+        // Create one-hot encoding matrices for state and arm variables
+        const stateMatrix = stateMatrices[link.stateVariable];
+        const armMatrix = armMatrices[link.armVariable];
+        console.log('State Matrix:', stateMatrix);
+        console.log('Arm Matrix:', armMatrix);
+        // Matrix multiplication: state * dist * arm^T
+        const tempMatrix = multiplyMatrices(stateMatrix, distMatrix);
+        const contributionMatrix = multiplyMatrices(tempMatrix, transposeMatrix(armMatrix));
+        console.log('Contribution Matrix:', contributionMatrix);
+        
+        // Add contribution to final matrix
+        for(let i = 0; i < NUM_TRIALS; i++) {
+            for(let j = 0; j < NUM_OPTIONS; j++) {
+                finalMatrix[i][j] += contributionMatrix[i][j];
+            }
+        }
+    });
+    
+    // Normalize to 0-100 range
+    const allValues = finalMatrix.flat();
+    const minVal = Math.min(...allValues);
+    const maxVal = Math.max(...allValues);
+    const range = maxVal - minVal;
 
-//根据矩阵生成对应数值
-// Generate Bernoulli rewards based on reward parameters
-function generateBernoulliRewards(reward_params) {
-    let rewardMatrix = [];
-    for (let i = 0; i < NUM_TRIALS+NUM_FORCED_TRIALS; i++) {
-        rewardMatrix.push(reward_params.map(probability => {
-            return jsPsych.randomization.sampleBernoulli(probability);
-        }));
+
+    
+
+    let standardizedMatrix;
+    if (range === 0) {
+        standardizedMatrix = finalMatrix.map(row => row.map(() => 50));
+    } else {
+        standardizedMatrix = finalMatrix.map(row => 
+            row.map(val => ((val - minVal) / range) * 100)
+        );
     }
-    return rewardMatrix;
+    console.log('Standardized Matrix:', standardizedMatrix);
+    return standardizedMatrix;
+    
 }
-function generateGaussianRewards(reward_params) {
-    let rewardMatrix = [];
-    for (let i = 0; i < NUM_TRIALS + NUM_FORCED_TRIALS; i++) {
-        rewardMatrix.push(reward_params.map(probability => {
-            return jsPsych.randomization.sampleGaussian(probability * 100, 10);
-        }));
+
+// Helper functions for matrix operations
+function multiplyMatrices(a, b) {
+    return a.map(row => 
+        transposeMatrix(b).map(col => 
+            row.reduce((sum, val, i) => sum + val * col[i], 0)
+        )
+    );
+}
+
+function transposeMatrix(matrix) {
+    return matrix[0].map((_, i) => matrix.map(row => row[i]));
+}
+
+// Generate final reward matrix
+const rewardMatrixRaw = generateRewardMatrix();
+console.log('Reward Matrix Raw:', rewardMatrixRaw);
+
+function generateRewardMatrixActual(rewardMatrixRaw, rewardType) {
+    // Helper function for generating truncated Gaussian values
+    function generateTruncatedGaussian(mean, sd) {
+        while (true) {
+            // Box-Muller transform
+            const u1 = Math.random();
+            const u2 = Math.random();
+            const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+            const value = mean + z * sd;
+            
+            // Only return if within [0, 100] bounds
+            if (value >= 0 && value <= 100) {
+                return Math.round(value);
+            }
+        }
     }
-    return rewardMatrix;
+
+    return rewardMatrixRaw.map(row => 
+        row.map(value => {
+            if (rewardType === 'binary') {
+                // Bernoulli distribution with p = value/100
+                return Math.random() < (value / 100) ? 1 : 0;
+            } else if (rewardType === 'numeric') {
+                // Truncated Gaussian with mean = value, sd = 5
+                return generateTruncatedGaussian(value, 5);
+            } else {
+                console.warn('Unknown reward type, returning raw value');
+                return value;
+            }
+        })
+    );
 }
-function generateReward_matrix(reward_params,reward_type) {
-    if (reward_type === "gaussian") {
-        return generateGaussianRewards(reward_params);
-    } else if (reward_type === "bernoulli") {
-        return generateBernoulliRewards(reward_params);
-    }
-}
-const allRewards = generateReward_matrix(REWARD_PARAMETERS, REWARD_TYPE);
+
+const allRewards = generateRewardMatrixActual(rewardMatrixRaw, REWARD_TYPE);
+console.log('All Rewards:', allRewards);
 
 
-
-// 3. UI creation --------------------------------------------------------------
+// 4. UI creation --------------------------------------------------------------
 function createForcedChoiceTrial(trialIndex, forcedChoice) {
     return {
         type: jsPsychHtmlKeyboardResponse,
@@ -231,7 +531,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
             const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
             return `
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                    <img src='${IMG_CONTEXT[trialIndex]}' 
                          style='max-width: 150px;'></img>
                     <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
@@ -240,7 +540,7 @@ function createForcedChoiceTrial(trialIndex, forcedChoice) {
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_OPTIONS).fill().map((_, i) => `
                     <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
-                        <img src='${images[i]}' style='width: 100%;'></img>
+                        <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
                         <p class='small'><strong>Press key ${i+1}</strong></p>
                     </div>
                 `).join('')}
@@ -300,7 +600,7 @@ function createTrial(trialIndex) {
             const totalWidth = optionWidth_raw * NUM_OPTIONS + totalGapWidth;      
             return `
                 <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                    <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                    <img src='${IMG_CONTEXT[trialIndex]}' 
                          style='max-width: 150px;'></img>
                     <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
                     <p>Current Total Aetherium: ${currentTotal}</p>
@@ -309,7 +609,7 @@ function createTrial(trialIndex) {
                 <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
                 ${Array(NUM_OPTIONS).fill().map((_, i) => `
                     <div style='width: ${optionWidth}%; margin: 0 ${gapPercentage/2}%; text-align: center;'>
-                        <img src='${images[i]}' style='width: 100%;'></img>
+                        <img src='${IMG_ARM[i]}' style='width: 100%;'></img>
                         <p class='small'><strong>Press key ${i+1}</strong></p>
                     </div>
                 `).join('')}
@@ -346,14 +646,14 @@ function createFeedback(trialIndex) {
             return `
                 <div>
                     <div style='width: 100%; text-align: center; margin-bottom: 20px;'>
-                        <img src='${generateImagePath('context', contextPairs[CONTEXT_INDICES[trialIndex]])}' 
+                        <img src='${IMG_CONTEXT[trialIndex]}' 
                              style='max-width: 150px;'></img>
                         <p><strong>${contextNames[CONTEXT_INDICES[trialIndex]]}</strong></p>
                         <p>Current Total Aetherium: ${lastTrial.total_reward}</p>
                         <p>Remaining Days: ${remainingTrials-1}</p>
                     </div>
                     <div style='width: ${totalWidth}%; margin: 0 auto; display: flex; justify-content: center;'>
-                        ${images.map((img, index) => {
+                        ${IMG_ARM.map((img, index) => {
                             const isSelected = index === choice;
                             const reward = allRewards[trialIndex][index];
                             const showReward = FEEDBACK_VERSION=="full" || isSelected;
@@ -390,7 +690,7 @@ function createFeedback(trialIndex) {
     };
 }
 // Rating for each arm
-const probabilityRatings = images.map((image, index) => {
+const probabilityRatings = IMG_ARM.map((image, index) => {
     return {
         type: jsPsychHtmlSliderResponse,
         stimulus: `
@@ -413,76 +713,6 @@ const probabilityRatings = images.map((image, index) => {
         }
     };
 });
-
-
-// 4. Experiment basic setup --------------------------------------------------------------
-const jsPsych = initJsPsych({
-    on_finish: function() {
-        // Get all data and ignore multiple columns
-        var all_data = jsPsych.data.get()
-            .ignore([
-            'stimulus',
-            'trial_type',
-            'internal_node_id',
-            'view_history',
-            'time_elapsed',
-            'response_label',
-            'slider_start',
-            'success',
-            'trial_index',
-            'plugin_version',
-            'total_reward'
-        ])
-        .filter([{tag: 'trial'}, {tag: 'rating'}]);
-
-        // Download CSV file
-        const filename = `bandit_data_${Date.now()}.csv`;
-        all_data.localSave('csv', filename);
-        
-        // Also log to console for debugging
-        console.log(all_data.csv());
-    },
-    show_progress_bar: true
-});
-const enterFullscreen = {
-    type: jsPsychFullscreen,
-    fullscreen_mode: true,
-    message: '<p>The experiment will start in fullscreen mode.</p><p>Click the button below to enter fullscreen mode.</p>',
-    button_label: 'Enter Fullscreen',
-    data: {
-        tag: 'enter_fullscreen'
-    }
-};
-const exitFullscreen = {
-    type: jsPsychFullscreen,
-    fullscreen_mode: false,
-    data: {
-        tag: 'exit_fullscreen'
-    }
-};
-const welcome = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: `<h1>Welcome to the ${NAME}</h1><p>[Press any key to continue]</p>`,
-    data: {
-        tag: 'welcome'
-    } 
-};
-const debrief = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const totalReward = jsPsych.data.get().select('reward').sum();
-        return `
-            <h2>Experiment finished</h2>
-            <p>Your total score: ${totalReward}</p>
-            <p>Your total payoff: ${totalReward*0.01} \$</p>
-            <p>Thank you for your participation!</p>
-            <p>[Press any key to exit]</p>
-        `;
-    },
-    data: {
-        tag: 'debrief'
-    }
-};
 
 
 // 5. Timeline --------------------------------------------------------------
@@ -513,6 +743,11 @@ probabilityRatings.forEach(rating => {
 timeline.push(debrief);
 timeline.push(exitFullscreen);
 
-jsPsych.run(timeline);
+
+
+// Run experiment
+jatos.onLoad(() => {
+  jsPsych.run(timeline);
+});
 </script>
 </html>

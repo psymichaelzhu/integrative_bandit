@@ -39,3 +39,5 @@ const ARM_VARIABLES = {
 const DISTRIBUTION_LINKS = [
   {stateVariable: 'Time', stateDistribution: 'Identical', interaction: '+', armDistribution: 'Identical', armVariable: 'Index'}
 ];
+
+const NUM_FORCED_TRIALS = 0;

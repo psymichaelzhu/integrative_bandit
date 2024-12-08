@@ -1,19 +1,19 @@
 // Basic Parameters
-const NUM_TRIALS = 10;
-const NUM_OPTIONS = 5;
+const NUM_TRIALS = 5;
+const NUM_OPTIONS = 4;
 //const RANDOM_SEED = 42;
 
 // State Variables
 const STATE_VARIABLES = {
   Time: {levels: 10, pattern: 'Loop'},
-  Planet: {levels: 3, pattern: 'Shuffle'}
+  Planet: {levels: 3, pattern: 'Loop'}
 };
 
 // Arm Variables
 const ARM_VARIABLES = {
   Index: {levels: 5, pattern: 'Loop'},
-  Color: {levels: 3, pattern: 'Shuffle'},
-  Shape: {levels: 3, pattern: 'Shuffle'}
+  Color: {levels: 2, pattern: 'Shuffle'},
+  Shape: {levels: 2, pattern: 'Shuffle'}
 };
 
 // Distribution Links

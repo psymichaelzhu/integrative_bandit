@@ -260,7 +260,7 @@ generate_sequence <- function(n_levels, distribution_type, interaction_type = "+
 # Distribution Matrix Creation
 create_distribution_matrix <- function(state_levels, arm_levels, 
                                      state_dist_type, arm_dist_type,
-                                     interaction_type = "+") {
+                                     interaction_type = "on") {
     
     if (interaction_type == "on") {
         # First generate arm sequence based on arm_dist_type
@@ -285,8 +285,8 @@ create_distribution_matrix <- function(state_levels, arm_levels,
     } else {
         # Generate arm sequence and repeat it for each state level
         arm_seq <- generate_sequence(arm_levels, arm_dist_type)
-        dist_matrix <- matrix(rep(arm_seq, each = 1), 
-                            nrow = 1, 
+        dist_matrix <- matrix(rep(arm_seq, each = state_levels), 
+                            nrow = state_levels, 
                             ncol = arm_levels)
         dist_matrix
     }
@@ -299,14 +299,16 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
   final_matrix <- matrix(0, nrow = num_trials, ncol = num_arms)
   
   for (i in 1:nrow(links)) {
-    # Get state variable info
-    state_var <- links$State_Variable[i]
-    state_info <- state_data[state_data$Name == state_var, ]
-    
-    # Get arm variable info
-    arm_var <- links$Arm_Variable[i]
-    arm_info <- arm_data[arm_data$Name == arm_var, ]
-    
+    if (links$Interaction[i] == "on") {
+      # Get state variable info
+      state_var <- links$State_Variable[i]
+      state_info <- state_data[state_data$Name == state_var, ]
+      state_info$Distribution <- links$State_Distribution[i]
+    } else {
+      state_info <- state_data[state_data$Name == "Time",]
+      state_info$Distribution <- "Identical"
+    }
+
     # Create matrices
     state_matrix <- create_variable_matrix(
       state_info$Levels, 
@@ -315,6 +317,10 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
       state_info$Levels
     )
     
+    # Get arm variable info
+    arm_var <- links$Arm_Variable[i]
+    arm_info <- arm_data[arm_data$Name == arm_var, ]
+
     arm_matrix <- create_variable_matrix(
       arm_info$Levels,
       arm_info$Pattern,
@@ -326,7 +332,7 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
     dist_matrix <- create_distribution_matrix(
       state_levels = state_info$Levels,
       arm_levels = arm_info$Levels,
-      state_dist_type = links$State_Distribution[i],
+      state_dist_type = state_info$Distribution,
       arm_dist_type = links$Arm_Distribution[i],
       interaction_type = links$Interaction[i]
     )
@@ -334,11 +340,13 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
     # Matrix multiplication
     temp_matrix <- state_matrix %*% dist_matrix
     pair_matrix <- temp_matrix %*% t(arm_matrix)
+    print(pair_matrix)
     
     # Add to final matrix
     final_matrix <- final_matrix + pair_matrix
   }
   
+
   # Safe normalization to 0-100 range
   range_diff <- max(final_matrix) - min(final_matrix)
   if (range_diff == 0) {

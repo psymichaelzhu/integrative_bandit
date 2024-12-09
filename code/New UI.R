@@ -20,6 +20,9 @@ ui <- fluidPage(
   ),
   titlePanel("Integrative Bandit Parameterization Interface"),
   
+  # Basic Configuration
+  h4("Basic Configuration"),
+  
   # Initialization of NUM_TRIALS, NUM_ARMS, and SEED
   fluidRow(
     column(4, numericInput("num_trials", "Number of Trials", value = 10, min = 1)),
@@ -41,11 +44,12 @@ ui <- fluidPage(
   ),
 
 
-  # State and Arm Variables Configuration (side by side)
+  # Trial and Arm Variables Configuration (side by side)
   fluidRow(
-    # State Variables Configuration
+    h4("Feature Configuration"),
+    # Trial Variables Configuration
     column(6,
-           h4("State Variables Configuration"),
+           h5("Trial-based Variables Configuration"),
            fluidRow(
              column(3, 
                     textInput("state_name", "Name")),
@@ -66,7 +70,7 @@ ui <- fluidPage(
     
     # Arm Variables Configuration
     column(6,
-           h4("Arm Variables Configuration"),
+           h5("Arm-based Variables Configuration"),
            fluidRow(
              column(3, 
                     textInput("arm_name", "Name")),
@@ -89,7 +93,7 @@ ui <- fluidPage(
   # Reward Distribution Configuration
   fluidRow(
     column(12,
-           h4("Reward Distribution Configuration"),
+           h4("Reward Configuration"),
            fluidRow(
              column(2, 
                     selectInput("reward_function", "Function", 
@@ -98,8 +102,8 @@ ui <- fluidPage(
                     style = "padding-right: 5px;"),
              column(2, 
                     selectInput("type1", "Type", 
-                              choices = c("State", "Arm"),
-                              selected = "State"),
+                              choices = c("Trial", "Arm"),
+                              selected = "Trial"),
                     style = "padding-right: 5px;"),
              column(2, 
                     selectInput("name1", "Name", 
@@ -159,7 +163,10 @@ ui <- fluidPage(
                       selected = "Equal"),
            selectInput("noise_level", "Noise Level",
                       choices = c("None", "Low", "Median", "High"),
-                      selected = "None")
+                      selected = "None"),
+           selectInput("noise_informed", "Explicitly Informed",
+                      choices = c("Yes", "No"),
+                      selected = "No")
     ),
     
     # Cost Column
@@ -170,7 +177,10 @@ ui <- fluidPage(
                       selected = "Equal"),
            selectInput("cost_level", "Cost Level",
                       choices = c("None", "Low", "Median", "High"),
-                      selected = "None")
+                      selected = "None"),
+           selectInput("cost_informed", "Explicitly Informed",
+                      choices = c("Yes", "No"),
+                      selected = "Yes")
     )
   ),
 
@@ -219,10 +229,10 @@ generate_config_lines <- function(basic_parameters, input, state_data, arm_data,
             "};",
             "")
   
-  # Add state variables section
+  # Add trial variables section
   state_df <- state_data()
   lines <- c(lines,
-            "// State Variables",
+            "// Trial Variables",
             "const STATE_VARIABLES = {")
   
   state_lines <- apply(state_df, 1, function(row) {
@@ -283,8 +293,8 @@ server <- function(input, output, session) {
     seed = 42
   )
   state_data <- reactiveVal(data.frame(
-    Name = c("Time", "Planet"),
-    Levels = c(10, 1),  # Time will be updated by num_trials
+    Name = c("Index", "Planet"),
+    Levels = c(10, 1),  # Index will be updated by num_trials
     Pattern = c("Loop", "Shuffle"),
     stringsAsFactors = FALSE
   ))
@@ -350,7 +360,7 @@ server <- function(input, output, session) {
   observeEvent(basic_parameters$num_trials, {
     # Update state_data (Trial Levels) when num_trials changes
     current_data <- state_data()
-    time_row <- which(current_data$Name == "Time")
+    time_row <- which(current_data$Name == "Index")
     if (length(time_row) > 0) {
       current_data$Levels[time_row] <- basic_parameters$num_trials
       state_data(current_data)
@@ -415,8 +425,8 @@ server <- function(input, output, session) {
   output$state_table <- renderDT({
     df <- state_data()
     df$Operation <- sapply(1:nrow(df), function(i) {
-      if (df$Name[i] == "Time") {
-        # Time row is uneditable and not deletable
+      if (df$Name[i] == "Index") {
+        # Index row is uneditable and not deletable
         return("")
       } else if (df$Name[i] == "Planet") {
         # Planet row is editable but not deletable
@@ -450,7 +460,7 @@ server <- function(input, output, session) {
             targets = "_all",
             render = JS(
               "function(data, type, row, meta) {",
-              "  if (row[0] === 'Time') {",
+              "  if (row[0] === 'Index') {",
               "    return '<span class=\"text-muted\">' + data + '</span>';",
               "  }",
               "  return data;",
@@ -523,7 +533,7 @@ server <- function(input, output, session) {
 
   # Add/Update Feature
   observeEvent(input$add_state, {
-    if (input$state_name == "Time") { #Time is not editable
+    if (input$state_name == "Index") { #Index is not editable
       return()
     }
     
@@ -578,21 +588,21 @@ server <- function(input, output, session) {
   # Delete Feature
   observeEvent(input$remove_state_name, {
     name_to_remove <- input$remove_state_name
-    if (!is.null(name_to_remove) && !name_to_remove %in% c("Time", "Planet")) {  # Time and Planet are not deletable
-        # Remove any rewards associated with this state
+    if (!is.null(name_to_remove) && !name_to_remove %in% c("Index", "Planet")) {  # Index and Planet are not deletable
+        # Remove any rewards associated with this trial
         current_rewards <- reward_data()
         rewards_to_keep <- !(
-            (current_rewards$Type1 == "State" & current_rewards$Name1 == name_to_remove) |
-            (current_rewards$Type2 == "State" & current_rewards$Name2 == name_to_remove)
+            (current_rewards$Type1 == "Trial" & current_rewards$Name1 == name_to_remove) |
+            (current_rewards$Type2 == "Trial" & current_rewards$Name2 == name_to_remove)
         )
         reward_data(current_rewards[rewards_to_keep, , drop = FALSE])
         
-        # Then remove the state
+        # Then remove the trial
         current_data <- state_data()
         current_data <- current_data[current_data$Name != name_to_remove, ]
         state_data(current_data)
         
-        # Update the state feature dropdown
+        # Update the trial feature dropdown
         updateSelectInput(session, "link_state", choices = state_data()$Name)
     }
   })
@@ -624,7 +634,7 @@ server <- function(input, output, session) {
 
   observeEvent(input$type1, {
     # Update name1 choices based on type1
-    if (input$type1 == "State") {
+    if (input$type1 == "Trial") {
       updateSelectInput(session, "name1", choices = state_data()$Name)
     } else {
       updateSelectInput(session, "name1", choices = arm_data()$Name)
@@ -648,11 +658,11 @@ server <- function(input, output, session) {
       shinyjs::enable("name2")
       
       # Set opposite type for type2 based on type1
-      if (input$type1 == "State") {
+      if (input$type1 == "Trial") {
         updateTextInput(session, "type2", value = "Arm")
         updateSelectInput(session, "name2", choices = arm_data()$Name)
       } else {
-        updateTextInput(session, "type2", value = "State")
+        updateTextInput(session, "type2", value = "Trial")
         updateSelectInput(session, "name2", choices = state_data()$Name)
       }
     }
@@ -660,7 +670,7 @@ server <- function(input, output, session) {
 
   # Update name1 choices when state_data or arm_data changes
   observe({
-    if (input$type1 == "State") {
+    if (input$type1 == "Trial") {
       updateSelectInput(session, "name1", choices = state_data()$Name)
     }
   })

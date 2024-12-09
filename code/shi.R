@@ -360,9 +360,7 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
   return(final_matrix)
 }
 
-
-
-# Helper function: Convert level to value
+# Convert level to value
 level_to_value <- function(level) {
     switch(level,
            "None" = 0,
@@ -372,7 +370,7 @@ level_to_value <- function(level) {
            0)  # Default value
 }
 
-# Helper function: Generate sequence
+#  Generate sequence
 generate_sequence <- function(pattern, level, num_arms) {
     if (pattern == "Equal") {
       # Equal pattern: All arms use the same value

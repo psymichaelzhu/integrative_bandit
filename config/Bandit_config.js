@@ -8,15 +8,15 @@ const COVER_STORY = 'non-social';
 // Asymmetry Configuration
 const ASYMMETRY_CONFIG = {
   information: {
-    pattern: 'Unequal',
-    numForcedChoice: 5
+    pattern: 'Equal',
+    numForcedChoice: 0
   },
   noise: {
     pattern: 'Equal',
-    level: 'High',
+    level: 'None',
   },
   cost: {
-    pattern: 'Unequal',
+    pattern: 'Equal',
     level: 'None',
   }
 };
@@ -24,8 +24,7 @@ const ASYMMETRY_CONFIG = {
 // State Variables
 const STATE_VARIABLES = {
   Time: {levels: 10, pattern: 'Loop'},
-  Planet: {levels:  1, pattern: 'Shuffle'},
-  Season: {levels:  4, pattern: 'Shuffle'}
+  Planet: {levels:  1, pattern: 'Shuffle'}
 };
 
 // Arm Variables
@@ -36,8 +35,4 @@ const ARM_VARIABLES = {
 };
 
 // Distribution Links
-const DISTRIBUTION_LINKS = [
-  {stateVariable: 'Time', stateDistribution: 'Identical', interaction: '+', armDistribution: 'Identical', armVariable: 'Index'}
-];
-
-const NUM_FORCED_TRIALS = 0;
+const DISTRIBUTION_LINKS = [];

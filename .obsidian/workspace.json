@@ -136,7 +136,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "code/Document.md",
+                "file": "code/Computation.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -153,7 +153,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "code/Document.md",
+                "file": "code/Computation.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -176,7 +176,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "code/Document.md"
+                "file": "code/Computation.md"
               }
             }
           }
@@ -197,14 +197,15 @@
       "command-palette:打开命令面板": false
     }
   },
-  "active": "b5692643fc5bd501",
+  "active": "f411401fe6009913",
   "lastOpenFiles": [
+    "config/Bandit_config_test.js",
+    "code/Document.md",
     "test.R",
     "code/New UI.R",
     "code/New UI.py",
     "Document_UI.pdf",
     "code/Computation.md",
-    "code/Document.md",
     "Pasted image 20241208183849.png",
     "Pasted image 20241208183817.png",
     "code/image.png",

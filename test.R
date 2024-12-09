@@ -1,18 +1,5 @@
 
 
-  
-  
-  
-  
-  
-  
-  
-  
-  # Update arm_data when num_arms changes
-  observeEvent(parameters$num_arms, {
-    
-  })
-
 
 
 

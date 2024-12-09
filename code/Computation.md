@@ -374,3 +374,17 @@ Or manipulations can be hidden from participants, in which case participants can
 - `Level` field is only available when `Pattern` = "Equal". It determines the level of the manipulation. 
 - `Explicitly Provided`: Only for noise and cost manipulation. Whether the manipulation is explicitly informed to participants. 
 - `# Forced Choice`: Only for information manipulation with `Pattern` = "Unequal". It determines the total number of forced choices in the forced choice phase. The samples will be scaled to avoid undesired excessive forced choices. For example, if there are only 10 trials, it's easy for the sum of unequal samples to exceed the total trial number.
+
+
+
+1. 相互关联 检查 （尤其是不考虑的那些
+2. Reward处理 (新版)
+
+matrix 和 可视化
+
+具体function
+
+实验程序修改
+
+3. 复制 导出参数； 粘贴配置
+

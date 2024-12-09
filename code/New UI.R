@@ -44,12 +44,12 @@ ui <- fluidPage(
   ),
 
 
-  # Trial and Arm Variables Configuration (side by side)
+  # Trial and Arm Features Configuration
+  h4("Feature Configuration"),
   fluidRow(
-    h4("Feature Configuration"),
-    # Trial Variables Configuration
+    # Trial Features Configuration
     column(6,
-           h5("Trial-based Variables Configuration"),
+           h4("Trial-based Features"),
            fluidRow(
              column(3, 
                     textInput("state_name", "Name")),
@@ -68,9 +68,9 @@ ui <- fluidPage(
            DTOutput("state_table")
     ),
     
-    # Arm Variables Configuration
+    # Arm Features Configuration
     column(6,
-           h5("Arm-based Variables Configuration"),
+           h4("Arm-based Features"),
            fluidRow(
              column(3, 
                     textInput("arm_name", "Name")),
@@ -197,7 +197,7 @@ ui <- fluidPage(
 
 # Helper Functions =============================================================
 # Create a new function to generate configuration lines
-generate_config_lines <- function(basic_parameters, input, state_data, arm_data, link_data) {
+generate_config_lines <- function(basic_parameters, input, state_data, arm_data, reward_data) {
   lines <- c()
   
   # Add basic_parameters section
@@ -210,7 +210,7 @@ generate_config_lines <- function(basic_parameters, input, state_data, arm_data,
             paste0("const COVER_STORY = '", input$cover_story, "';"),
             "")
   
-  # Add Asymmetric Configuration section
+  # Add Asymmetric Configuration section with updated fields
   lines <- c(lines,
             "// Asymmetry Configuration", 
             "const ASYMMETRY_CONFIG = {",
@@ -221,10 +221,12 @@ generate_config_lines <- function(basic_parameters, input, state_data, arm_data,
             "  noise: {",
             paste0("    pattern: '", input$noise_pattern, "',"),
             paste0("    level: '", input$noise_level, "',"),
+            paste0("    informed: ", tolower(input$noise_informed == "Yes")),
             "  },",
             "  cost: {",
             paste0("    pattern: '", input$cost_pattern, "',"),
             paste0("    level: '", input$cost_level, "',"),
+            paste0("    informed: ", tolower(input$cost_informed == "Yes")),
             "  }",
             "};",
             "")
@@ -232,7 +234,7 @@ generate_config_lines <- function(basic_parameters, input, state_data, arm_data,
   # Add trial variables section
   state_df <- state_data()
   lines <- c(lines,
-            "// Trial Variables",
+            "// Trial Features",
             "const STATE_VARIABLES = {")
   
   state_lines <- apply(state_df, 1, function(row) {
@@ -246,7 +248,7 @@ generate_config_lines <- function(basic_parameters, input, state_data, arm_data,
   # Add arm variables section
   arm_df <- arm_data()
   lines <- c(lines,
-            "// Arm Variables",
+            "// Arm Features",
             "const ARM_VARIABLES = {")
   
   arm_lines <- apply(arm_df, 1, function(row) {
@@ -257,27 +259,35 @@ generate_config_lines <- function(basic_parameters, input, state_data, arm_data,
   })
   lines <- c(lines, paste0(paste(arm_lines, collapse = ",\n"), "\n};"), "")
   
-  # Add link matrix section
-  link_df <- link_data()
-  if (nrow(link_df) > 0) {
+  # Add reward configuration section
+  reward_df <- reward_data()
+  if (nrow(reward_df) > 0) {
     lines <- c(lines,
-              "// Distribution Links",
-              "const DISTRIBUTION_LINKS = [")
+              "// Reward Configuration",
+              "const REWARD_CONFIG = [")
     
-    link_lines <- apply(link_df, 1, function(row) {
-      paste0("  {",
-            "stateVariable: '", row["State_Variable"], "', ",
-            "stateDistribution: '", row["State_Distribution"], "', ",
-            "interaction: '", row["Interaction"], "', ",
-            "armDistribution: '", row["Arm_Distribution"], "', ",
-            "armVariable: '", row["Arm_Variable"], "'",
-            "}")
+    reward_lines <- apply(reward_df, 1, function(row) {
+      if (row["Conditional"]) {
+        paste0("  {",
+              "function: '", row["Function"], "', ",
+              "type1: '", row["Type1"], "', ",
+              "name1: '", row["Name1"], "', ",
+              "type2: '", row["Type2"], "', ",
+              "name2: '", row["Name2"], "'",
+              "}")
+      } else {
+        paste0("  {",
+              "function: '", row["Function"], "', ",
+              "type1: '", row["Type1"], "', ",
+              "name1: '", row["Name1"], "'",
+              "}")
+      }
     })
-    lines <- c(lines, paste0(paste(link_lines, collapse = ",\n"), "\n];"))
+    lines <- c(lines, paste0(paste(reward_lines, collapse = ",\n"), "\n];"))
   } else {
     lines <- c(lines,
-              "// Distribution Links",
-              "const DISTRIBUTION_LINKS = [];")
+              "// Reward Configuration",
+              "const REWARD_CONFIG = [];")
   }
   
   return(lines)
@@ -285,7 +295,7 @@ generate_config_lines <- function(basic_parameters, input, state_data, arm_data,
 # Server =====================================================================
 
 server <- function(input, output, session) {
-  # 0 Reactive Variables
+  # 0 Reactive Features
   # Define basic_parameters reactiveValues first
   basic_parameters <- reactiveValues(
     num_trials = 10,
@@ -766,7 +776,10 @@ server <- function(input, output, session) {
   
 
   # Generate config text
-  config_text <- reactiveVal("")
+  config_text <- reactive({
+    # Call the generate_config_lines function to get the configuration lines
+    generate_config_lines(basic_parameters, input, state_data, arm_data, reward_data)
+  })
 
   # Save Configuration
   output$save_config <- downloadHandler(
@@ -784,7 +797,7 @@ server <- function(input, output, session) {
     rclipButton(
       inputId = "copy_config",
       label = "Copy to Clipboard",
-      clipText = config_text(),
+      clipText = paste(config_text(), collapse = "\n"),
       icon = icon("clipboard"),
       class = "btn-info"
     )

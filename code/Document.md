@@ -22,7 +22,7 @@ In this section, we will go through some basic setup of bandit task.
 > All the calculation are based on 0-100 scale. If you choose 'binary' reward type, the reward matrix will be converted to 0-1 scale.
 
 ## 1.3 Setup with UI
-![[Pasted image 20241207234217.png]]
+![[Pasted image 20241209085213.png]]
 Every field shown above can be set in UI.
 
 > [!NOTE]
@@ -120,7 +120,7 @@ For example, `season` can be a trial-based feature, with levels of `4` (e.g. Spr
 Although those self-defined features can influence the reward generation, they are not gonna be explicitly presented in the task, unless you modify the stimulus presentation part of the experiment script.
 
 ## 2.3 Setup with UI
-![[Pasted image 20241207231819.png]]
+![[Pasted image 20241209085153.png]]
 To **add** a feature:
 1. Select the corresponding panel for trial-based or arm-based feature.
 > If the feature changes across trials, go to `Trial-Based Feature`.
@@ -320,7 +320,7 @@ There are four available patterns:
 
 
 ## 3.3 Setup with UI
-![[Pasted image 20241208183849.png]]
+![[Pasted image 20241209085138.png]]
 Configure the mapping just like how we write regression formula:
 $f_1(Feature1|Feature2) + f_2(Feature1) + f_3(Feature3|Feature4)...$
 
@@ -375,7 +375,7 @@ Or manipulations can be hidden from participants, in which case participants can
 
 
 ## 4.3 Setup with UI
-![[Pasted image 20241208004007.png]]
+![[Pasted image 20241209085126.png]]
 - `Pattern` specifies whether the manipulation is the same or different among arms.
    - "Equal": Identical among arms, equal to `Level`.
    - "Unequal": Different among arms, sampled from the manipulation level list (0, 1, 5, 10)

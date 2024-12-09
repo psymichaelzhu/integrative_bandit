@@ -136,7 +136,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "code/Computation.md",
+                "file": "code/Document.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -153,7 +153,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "code/Computation.md",
+                "file": "code/Document.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -176,7 +176,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "code/Computation.md"
+                "file": "code/Document.md"
               }
             }
           }
@@ -197,15 +197,24 @@
       "command-palette:打开命令面板": false
     }
   },
-  "active": "f411401fe6009913",
+  "active": "b5692643fc5bd501",
   "lastOpenFiles": [
+    "Pasted image 20241209085213.png",
+    "Pasted image 20241209085153.png",
+    "Pasted image 20241209085138.png",
+    "Pasted image 20241209085126.png",
+    "code/Computation.md",
+    "code/rsconnect/documents/New UI.R/shinyapps.io/psymichaelzhu/code.dcf",
+    "code/rsconnect/documents/New UI.R/shinyapps.io/psymichaelzhu",
+    "code/rsconnect/documents/New UI.R/shinyapps.io",
+    "code/rsconnect/documents/New UI.R",
+    "code/rsconnect/documents",
+    "code/rsconnect",
     "config/Bandit_config_test.js",
     "code/Document.md",
     "test.R",
     "code/New UI.R",
     "code/New UI.py",
-    "Document_UI.pdf",
-    "code/Computation.md",
     "Pasted image 20241208183849.png",
     "Pasted image 20241208183817.png",
     "code/image.png",
@@ -214,13 +223,8 @@
     "Pasted image 20241208180812.png.md",
     "Pasted image 20241208180712.png",
     "Pasted image 20241208180647.png",
-    "Pasted image 20241208180610.png",
-    "Pasted image 20241208180418.png",
-    "Pasted image 20241208180252.png",
     "JATOS.md",
     "未命名.md",
-    "未命名 1.md",
-    "Document.pdf",
-    "~$icon.pptx"
+    "未命名 1.md"
   ]
 }

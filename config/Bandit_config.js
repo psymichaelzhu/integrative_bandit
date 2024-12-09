@@ -1,6 +1,6 @@
 // Basic Parameters
-const NUM_TRIALS = 30;
-const NUM_ARMS = 8;
+const NUM_TRIALS = 10;
+const NUM_ARMS = 5;
 const REWARD_TYPE = 'numeric';
 const FEEDBACK_VERSION = 'contingent';
 const COVER_STORY = 'non-social';
@@ -8,36 +8,37 @@ const COVER_STORY = 'non-social';
 // Asymmetry Configuration
 const ASYMMETRY_CONFIG = {
   information: {
-    pattern: 'Unequal',
-    numForcedChoice: 10
+    pattern: 'Equal',
+    numForcedChoice: 0
   },
   noise: {
     pattern: 'Equal',
-    level: 'High',
+    level: 'None',
+    informed: false
   },
   cost: {
-    pattern: 'Unequal',
+    pattern: 'Equal',
     level: 'None',
+    informed: true
   }
 };
 
-// State Variables
+// Trial Features
 const STATE_VARIABLES = {
-  Time: {levels: 30, pattern: 'Loop'},
-  Planet: {levels:  1, pattern: 'Shuffle'},
-  Season: {levels:  4, pattern: 'Loop'}
+  Index: {levels: 10, pattern: 'Loop'},
+  Planet: {levels:  1, pattern: 'Shuffle'}
 };
 
-// Arm Variables
+// Arm Features
 const ARM_VARIABLES = {
-  Index: {levels: 8, pattern: 'Loop'},
+  Index: {levels: 5, pattern: 'Loop'},
   Color: {levels: 1, pattern: 'Shuffle'},
-  Shape: {levels: 1, pattern: 'Shuffle'},
-  Name: {levels: 4, pattern: 'Shuffle'}
+  Shape: {levels: 1, pattern: 'Shuffle'}
 };
 
-// Distribution Links
-const DISTRIBUTION_LINKS = [
-  {stateVariable: ' ', stateDistribution: ' ', interaction: ' ', armDistribution: 'Identical', armVariable: 'Index'},
-  {stateVariable: 'Time', stateDistribution: 'Independent', interaction: 'on', armDistribution: 'Identical', armVariable: 'Index'}
+// Reward Configuration
+const REWARD_CONFIG = [
+  {function: 'Identical', type1: 'Trial', name1: 'Index'},
+  {function: 'Identical', type1: 'Trial', name1: 'Index', type2: 'Arm', name2: 'Color'},
+  {function: 'Monotonic', type1: 'Arm', name1: 'Color', type2: 'Trial', name2: 'Planet'}
 ];

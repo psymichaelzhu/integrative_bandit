@@ -301,6 +301,7 @@ server <- function(input, output, session) {
     Conditional = logical(),
     Type2 = character(),
     Name2 = character(),
+    Operation = character(),  # Initialize with an empty Operation column
     stringsAsFactors = FALSE
   ))
 
@@ -672,6 +673,7 @@ server <- function(input, output, session) {
       Conditional = input$conditional,
       Type2 = ifelse(input$conditional, input$type2, ""),
       Name2 = ifelse(input$conditional, input$name2, ""),
+      Operation = "",  # Placeholder for the Operation column
       stringsAsFactors = FALSE
     )
     
@@ -689,19 +691,59 @@ server <- function(input, output, session) {
       # Add new row
       current_data <- rbind(current_data, new_reward)
     }
+    
+    # Update Operation column with delete button
+    current_data$Operation <- sapply(1:nrow(current_data), function(i) {
+      sprintf('<button onclick="Shiny.setInputValue(\'remove_reward\', %d)" class="btn btn-danger btn-sm">Delete</button>', i)
+    })
+    
     reward_data(current_data)
   })
 
-  
+  # Delete Reward
+  observeEvent(input$remove_reward, {
+    index_to_remove <- input$remove_reward
+    current_data <- reward_data()
+    if (!is.null(index_to_remove) && index_to_remove <= nrow(current_data)) {
+      current_data <- current_data[-index_to_remove, ]
+      # Ensure Operation column is still present
+      if (nrow(current_data) == 0) {
+        current_data <- data.frame(
+          Function = character(),
+          Type1 = character(),
+          Name1 = character(),
+          Conditional = logical(),
+          Type2 = character(),
+          Name2 = character(),
+          Operation = character(),  # Keep Operation column
+          stringsAsFactors = FALSE
+        )
+      }
+      reward_data(current_data)
+    }
+  })
 
   # Display Reward Table
   output$reward_table <- renderDT({
     datatable(
       reward_data(),
+      escape = FALSE,
+      selection = "none",
+      rownames = FALSE,
       options = list(
         dom = 't',
         paging = FALSE,
-        stripeClasses = FALSE
+        stripeClasses = FALSE,
+        columnDefs = list(
+          list(
+            targets = "_all",
+            className = 'dt-left'
+          ),
+          list(
+            targets = ncol(reward_data()) - 1,
+            className = 'dt-center'
+          )
+        )
       )
     )
   })

@@ -4,10 +4,12 @@ library(ggplot2)
 library(reshape2)
 library(bruceR)
 library(shinyjs)
+library(rclipboard)
 # UI ==========================================================================
 
 ui <- fluidPage(
   useShinyjs(),
+  rclipboardSetup(),
   tags$head(
     tags$style(HTML("
       .text-muted {
@@ -180,18 +182,11 @@ ui <- fluidPage(
   # Bottom buttons
   fluidRow(
     column(12,
-           div(style = "margin-top: 20px; text-align: center;",
-               actionButton("check_link", "Check", 
-                          class = "btn-primary",
-                          style = "margin-right: 10px"),
-               actionButton("update_demo", "Update Demo", 
-                          class = "btn-primary",
-                          style = "margin-right: 10px"),
-               downloadButton("save_config", "Save Configuration",
-                            class = "btn-success",
-                            style = "margin-right: 10px"),
-               actionButton("copy_config", "Copy to Clipboard",
-                          class = "btn-info")
+           div(style = "display: flex; justify-content: center; gap: 10px;",
+               actionButton("check_link", "Check", class = "btn-primary"),
+               actionButton("update_demo", "Update Demo", class = "btn-primary"), 
+               downloadButton("save_config", "Save Configuration", class = "btn-success"),
+               uiOutput("clip")
            )
     )
   )
@@ -1215,6 +1210,31 @@ server <- function(input, output, session) {
       writeLines(lines, file)
     }
   )
+
+  # Add new reactive value for config text
+  config_text <- reactiveVal("")
+  
+  # Update config text whenever relevant inputs change
+  observe({
+    lines <- generate_config_lines(parameters, input, state_data, arm_data, link_data)
+    config_text(paste(lines, collapse = "\n"))
+  })
+  
+  # Add clipboard button
+  output$clip <- renderUI({
+    rclipButton(
+      inputId = "copy_config",
+      label = "Copy to Clipboard",
+      clipText = config_text(),
+      icon = icon("clipboard"),
+      class = "btn-info"
+    )
+  })
+  
+  # Optional: Add success message when copied
+  observeEvent(input$copy_config, {
+    showNotification("Configuration copied to clipboard!", type = "message")
+  })
 }
 
 # Run App =====================================================================

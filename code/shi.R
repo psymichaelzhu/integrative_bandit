@@ -360,17 +360,150 @@ summary_reward_distribution <- function(links, state_data, arm_data, num_trials,
   return(final_matrix)
 }
 
+
+
+# Helper function: Convert level to value
+level_to_value <- function(level) {
+    switch(level,
+           "None" = 0,
+           "Low" = 1,
+           "Median" = 5,
+           "High" = 10,
+           0)  # Default value
+}
+
+# Helper function: Generate sequence
+generate_sequence <- function(pattern, level, num_arms) {
+    if (pattern == "Equal") {
+      # Equal pattern: All arms use the same value
+      rep(level_to_value(level), num_arms)
+    } else {  # Unequal
+      # Randomly select from four levels
+      sample(c(0, 1, 5, 10), num_arms, replace = TRUE, prob = rep(0.25, 4))
+    }
+}
+
+
+# Generate Reward Matrix with noise and cost
+generate_final_reward_matrix <- function(base_matrix, noise_seq, cost_seq, reward_type) {
+  num_trials <- nrow(base_matrix)
+  num_arms <- ncol(base_matrix)
+  final_matrix <- base_matrix
+  
+  # Apply noise
+  for (arm in 1:num_arms) {
+    if (noise_seq[arm] > 0) {
+      # Generate noise
+      noise <- rnorm(num_trials, mean = 0, sd = noise_seq[arm])
+      final_matrix[, arm] <- final_matrix[, arm] + noise
+    }
+  }
+  
+  # Apply cost
+  for (arm in 1:num_arms) {
+    if (cost_seq[arm] > 0) {
+      final_matrix[, arm] <- final_matrix[, arm] - cost_seq[arm]
+    }
+  }
+  
+  # Truncate to valid range
+  if (reward_type == "binary") {
+    final_matrix <- pmax(pmin(final_matrix, 100), 0) / 100  # Truncate to [0,1]
+  } else {
+    final_matrix <- pmax(pmin(final_matrix, 100), 0)  # Truncate to [0,100]
+  }
+  
+  return(final_matrix)
+}
+
+# forced choice distribution
+get_forced_choice_distribution <- function(num_forced_choice, num_arms, pattern) {
+    if (num_forced_choice <= 0) return(NULL)
+    
+    forced_choices <- numeric(num_trials)
+    
+    if (pattern == "Equal") {
+      # Equal pattern: Assign as many trials as possible to each arm
+      repeats <- ceiling(num_forced_choice / num_arms)
+      all_choices <- rep(1:num_arms, repeats)[1:num_forced_choice]
+      forced_choices <- sample(all_choices) # Randomly shuffle the order
+    } else { # Unequal
+      probs <- exp(-(1:num_arms) / 2)
+      probs <- probs / sum(probs)
+      temp_choices <- sample(1:num_arms, num_forced_choice, prob = probs, replace = TRUE)
+      # Randomly generate an arm permutation for mapping
+      arm_mapping <- sample(1:num_arms)
+      forced_choices <- arm_mapping[temp_choices]
+    }
+    return(forced_choices)
+  }
+
 # Server =====================================================================
 
 server <- function(input, output, session) {
+  
+  
+  # 0 Reactive Variables
   # Define parameters reactiveValues first
   parameters <- reactiveValues(
     num_trials = 10,
     num_arms = 5,
     seed = 42
   )
+  
+  basic_update_heatmap <- reactive({
+    list(
+      parameters$num_trials,
+      parameters$num_arms,
+      parameters$seed
+    )
+  })
 
-  # Update parameters when inputs change
+
+  forced_distribution <- reactive({
+    get_forced_choice_distribution(
+      input$num_forced_choice,
+      parameters$num_arms,
+      input$forced_pattern
+    )
+  })
+  noise_sequence <- reactiveVal(numeric(0))
+  cost_sequence <- reactiveVal(numeric(0))
+  
+
+  state_data <- reactiveVal(data.frame(
+    Name = c("Time", "Planet"),
+    Levels = c(10, 1),  # Time will be updated by num_trials
+    Pattern = c("Loop", "Shuffle"),
+    stringsAsFactors = FALSE
+  ))
+  arm_data <- reactiveVal(data.frame(
+    Name = c("Index", "Color", "Shape"),
+    Levels = c(5, 1, 1),  # Index will be updated by num_arms
+    Pattern = c("Loop", "Shuffle", "Shuffle"),
+    stringsAsFactors = FALSE
+  ))
+  link_data <- reactiveVal(data.frame(
+    State_Variable = character(),
+    State_Distribution = character(),
+    Interaction = character(),
+    Arm_Distribution = character(),
+    Arm_Variable = character(),
+    stringsAsFactors = FALSE
+  ))
+
+  
+
+  # Reward Matrix
+  reward_matrix <- reactiveVal(matrix(0, nrow = 10, ncol = 5))  # Default size
+
+  
+  
+
+
+  # 1 Basic Section
+  # Valid update
+  
   observeEvent(input$num_trials, {
     new_value <- input$num_trials
     if (is.null(new_value) || is.na(new_value) || new_value < 1) {
@@ -398,16 +531,34 @@ server <- function(input, output, session) {
     }
   })
 
-  # Modify auto_update_trigger to use parameters
-  auto_update_trigger <- reactive({
-    list(
-      parameters$num_trials,
-      parameters$num_arms,
-      parameters$seed
-    )
-  })
+  # Chain Reaction
+  observeEvent(parameters$num_arms, {
+    # If parameters$num_arms change, valid num_arms
+    # Update arm_data (Arm Levels) when num_arms changes
+    current_data <- arm_data()
+    position_row <- which(current_data$Name == "Index")
+    if (length(position_row) > 0) {
+      current_data$Levels[position_row] <- parameters$num_arms
+      arm_data(current_data)
+    }
 
-  # Update state_data when num_trials changes
+    # Update noise sequence
+    new_noise <- generate_sequence(
+      input$noise_pattern,
+      input$noise_level,
+      parameters$num_arms
+    )
+    noise_sequence(new_noise)
+    
+    # Update cost sequence
+    new_cost <- generate_sequence(
+      input$cost_pattern,
+      input$cost_level,
+      parameters$num_arms
+    )
+    cost_sequence(new_cost)
+  }
+
   observeEvent(parameters$num_trials, {
     current_data <- state_data()
     time_row <- which(current_data$Name == "Time")
@@ -417,67 +568,266 @@ server <- function(input, output, session) {
     }
   })
 
-  # Update arm_data when num_arms changes
-  observeEvent(parameters$num_arms, {
-    current_data <- arm_data()
-    position_row <- which(current_data$Name == "Index")
-    if (length(position_row) > 0) {
-      current_data$Levels[position_row] <- parameters$num_arms
-      arm_data(current_data)
+  # Asymmetry Section
+  # UI display
+  #Unequal in Noise and Cost, UI
+  observe({
+    if (input$noise_pattern == "Unequal") {
+      shinyjs::addCssClass("noise_level", "text-muted")
+      shinyjs::disable("noise_level")
+      updateSelectInput(session, "noise_level", selected = "None")
+    } else {
+      shinyjs::removeCssClass("noise_level", "text-muted")
+      shinyjs::enable("noise_level")
     }
   })
 
-  # Add auto-update trigger
-  auto_update_trigger <- reactive({
-    list(
-      parameters$num_trials,
-      parameters$num_arms,
-      parameters$seed
+  observe({
+    if (input$cost_pattern == "Unequal") {
+      shinyjs::addCssClass("cost_level", "text-muted")
+      shinyjs::disable("cost_level")
+      updateSelectInput(session, "cost_level", selected = "None")
+    } else {
+      shinyjs::removeCssClass("cost_level", "text-muted")
+      shinyjs::enable("cost_level")
+    }
+  })
+
+
+  # Feature Section
+
+  # Table display
+  output$state_table <- renderDT({
+    df <- state_data()
+    df$Operation <- sapply(1:nrow(df), function(i) {
+      if (df$Name[i] == "Time") {
+        # Time row is uneditable and not deletable
+        return("")
+      } else if (df$Name[i] == "Planet") {
+        # Planet row is editable but not deletable
+        return("")
+      } else {
+        # Other rows are deletable
+        return(sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+                      df$Name[i]))
+      }
+    })
+    
+    datatable(
+      df,
+      escape = FALSE,
+      selection = "none",
+      rownames = FALSE,
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        stripeClasses = FALSE,
+        columnDefs = list(
+          list(
+            targets = "_all",
+            className = 'dt-left'
+          ),
+          list(
+            targets = ncol(df) - 1,
+            className = 'dt-center'
+          ),
+          list(
+            targets = "_all",
+            render = JS(
+              "function(data, type, row, meta) {",
+              "  if (row[0] === 'Time') {",
+              "    return '<span class=\"text-muted\">' + data + '</span>';",
+              "  }",
+              "  return data;",
+              "}"
+            )
+          )
+        ),
+        initComplete = JS(
+          "function(settings, json) {",
+          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",  # Set all rows to white first
+          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default row to gray
+          "}")
+      )
     )
   })
-  
-  # Automatically update reward matrix when basic parameters change
-  observeEvent(auto_update_trigger(), {
-    # Set seed before generating new matrix
-    set.seed(parameters$seed)
-    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
-    reward_matrix(new_matrix)
+  output$arm_table <- renderDT({
+    df <- arm_data()
+    df$Operation <- sapply(1:nrow(df), function(i) {
+      if (df$Name[i] == "Index") {
+        # Index row is uneditable and not deletable
+        return("")
+      } else if (df$Name[i] %in% c("Color", "Shape")) {
+        # Color and Shape rows are editable but not deletable
+        return("")
+      } else {
+        # Other rows are deletable
+        return(sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
+                      df$Name[i]))
+      }
+    })
+    
+    datatable(
+      df,
+      escape = FALSE,
+      selection = "none",
+      rownames = FALSE,
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        stripeClasses = FALSE,
+        columnDefs = list(
+          list(
+            targets = "_all",
+            className = 'dt-left'
+          ),
+          list(
+            targets = ncol(df) - 1,
+            className = 'dt-center'
+          ),
+          list(
+            targets = "_all",
+            render = JS(
+              "function(data, type, row, meta) {",
+              "  if (row[0] === 'Index') {",
+              "    return '<span class=\"text-muted\">' + data + '</span>';",
+              "  }",
+              "  return data;",
+              "}"
+            )
+          )
+        ),
+        initComplete = JS(
+          "function(settings, json) {",
+          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",  # Set all rows to white first
+          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default row to gray
+          "}")
+      )
+    )
   })
 
-  # Keep existing update_demo button for manual updates
-  observeEvent(input$update_demo, {
-    # Set seed before generating new matrix
-    set.seed(parameters$seed)
-    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
-    reward_matrix(new_matrix)
+  # Add/Update Feature
+  observeEvent(input$add_state, {
+    if (input$state_name == "Time") { #Time is not editable
+      return()
+    }
+    
+    new_state <- data.frame(
+      Name = input$state_name,
+      Levels = input$state_levels,
+      Pattern = input$state_pattern,
+      stringsAsFactors = FALSE
+    )
+    
+    # Check for duplicate
+    current_data <- state_data()
+    duplicate_idx <- which(current_data$Name == input$state_name)
+    
+    if (length(duplicate_idx) > 0) {
+      # Replace existing row
+      current_data[duplicate_idx, ] <- new_state
+      state_data(current_data)
+    } else {
+      # Add new row
+      state_data(rbind(current_data, new_state))
+    }
+    updateSelectInput(session, "link_state", choices = state_data()$Name)
+  })
+  observeEvent(input$add_arm, {
+    if (input$arm_name == "Index") { #Index is not editable
+      return()
+    }
+    
+    new_arm <- data.frame(
+      Name = input$arm_name,
+      Levels = input$arm_levels,
+      Pattern = input$arm_pattern,
+      stringsAsFactors = FALSE
+    )
+    
+    # Check for duplicate
+    current_data <- arm_data()
+    duplicate_idx <- which(current_data$Name == input$arm_name)
+    
+    if (length(duplicate_idx) > 0) {
+      # Replace existing row
+      current_data[duplicate_idx, ] <- new_arm
+      arm_data(current_data)
+    } else {
+      # Add new row
+      arm_data(rbind(current_data, new_arm))
+    }
+    updateSelectInput(session, "link_arm", choices = arm_data()$Name)
   })
 
-  # Initialize State and Arm Data with Default Rows
-  state_data <- reactiveVal(data.frame(
-    Name = c("Time", "Planet"),
-    Levels = c(10, 1),  # Time会被num_trials更新
-    Pattern = c("Loop", "Shuffle"),
-    stringsAsFactors = FALSE
-  ))
-  
-  arm_data <- reactiveVal(data.frame(
-    Name = c("Index", "Color", "Shape"),
-    Levels = c(5, 1, 1),  # Index会被num_arms更新
-    Pattern = c("Loop", "Shuffle", "Shuffle"),
-    stringsAsFactors = FALSE
-  ))
-  
-  # Initialize link data with interaction type
-  link_data <- reactiveVal(data.frame(
-    State_Variable = character(),
-    State_Distribution = character(),
-    Interaction = character(),
-    Arm_Distribution = character(),
-    Arm_Variable = character(),
-    stringsAsFactors = FALSE
-  ))
-  
-  # Add new reactive values to track link state
+  # Delete Feature
+  observeEvent(input$remove_state_name, {
+    name_to_remove <- input$remove_state_name
+    if (!is.null(name_to_remove) && !name_to_remove %in% c("Time", "Planet")) {  # Time and Planet are not deletable
+        # First remove any links that reference this state
+        current_links <- link_data()
+        links_to_keep <- current_links$State_Variable != name_to_remove
+        link_data(current_links[links_to_keep, , drop = FALSE])
+        
+        # Then remove the state
+        current_data <- state_data()
+        current_data <- current_data[current_data$Name != name_to_remove, ]
+        state_data(current_data)
+        
+        # Update the state feature dropdown
+        updateSelectInput(session, "link_state", choices = state_data()$Name)
+    }
+  })
+  observeEvent(input$remove_arm_name, {
+    name_to_remove <- input$remove_arm_name
+    if (!is.null(name_to_remove) && !name_to_remove %in% c("Index", "Color", "Shape")) {  # Index, Color, and Shape are not deletable
+      current_links <- link_data()
+      unique_arms_in_links <- unique(current_links$Arm_Variable)
+      if (name_to_remove %in% unique_arms_in_links && length(unique_arms_in_links) == 1) {
+        # Clear all links first
+        link_data(data.frame(
+          State_Variable = character(),
+          State_Distribution = character(),
+          Arm_Variable = character(),
+          Arm_Distribution = character(),
+          stringsAsFactors = FALSE
+        ))
+      } else {
+        # Remove only links that reference this arm
+        links_to_keep <- current_links$Arm_Variable != name_to_remove
+        link_data(current_links[links_to_keep, , drop = FALSE])
+      }
+      
+      # Then remove the arm
+      current_data <- arm_data()
+      current_data <- current_data[current_data$Name != name_to_remove, ]
+      arm_data(current_data)
+      
+      # Update the arm feature dropdown
+      updateSelectInput(session, "link_arm", choices = arm_data()$Name)
+    }
+  })
+
+
+  # UI display
+  # Safety check
+  # Forced Choice field, safety check
+  observeEvent(input$num_forced_choice, {
+    # Validate input
+    new_value <- input$num_forced_choice
+    if (is.null(new_value) || is.na(new_value) || new_value < 0 ) { #valid value
+      updateNumericInput(session, "num_forced_choice", value = 0)
+    } else if (new_value > parameters$num_trials) {
+      updateNumericInput(session, "num_forced_choice", value = parameters$num_trials)
+    } else {
+      parameters$num_forced_choice <- new_value
+    }
+  }, priority = 1000)
+
+
+  # Reward Section
+
+  #Update field
   observe({
     if (is.null(input$link_distributions)) {
       updateActionButton(session, "link_distributions", value = 0)
@@ -512,119 +862,8 @@ server <- function(input, output, session) {
                      selected = if (current_arm %in% arm_choices) current_arm else arm_choices[1])
   }, priority = 1000)  
   
-  # Initialize the default values to match input values
-  observe({
-    isolate({
-      # Update Time levels
-      current_state_data <- state_data()
-      time_row <- which(current_state_data$Name == "Time")
-      if (length(time_row) > 0) {
-        current_state_data$Levels[time_row] <- parameters$num_trials
-        state_data(current_state_data)
-      }
-      
-      # Update Index levels
-      current_arm_data <- arm_data()
-      position_row <- which(current_arm_data$Name == "Index")
-      if (length(position_row) > 0) {
-        current_arm_data$Levels[position_row] <- parameters$num_arms
-        arm_data(current_arm_data)
-      }
-    })
-  }, priority = 1000)  # High priority to ensure it runs at startup
   
-  # Add/Update State Variable with protection for default basic rows (Time and Index)
-  observeEvent(input$add_state, {
-    if (input$state_name == "Time") {
-      return()
-    }
-    
-    new_state <- data.frame(
-      Name = input$state_name,
-      Levels = input$state_levels,
-      Pattern = input$state_pattern,
-      stringsAsFactors = FALSE
-    )
-    
-    # Check for duplicate
-    current_data <- state_data()
-    duplicate_idx <- which(current_data$Name == input$state_name)
-    
-    if (length(duplicate_idx) > 0) {
-      # Replace existing row
-      current_data[duplicate_idx, ] <- new_state
-      state_data(current_data)
-    } else {
-      # Add new row
-      state_data(rbind(current_data, new_state))
-    }
-    updateSelectInput(session, "link_state", choices = state_data()$Name)
-  })
-  
-  observeEvent(input$add_arm, {
-    if (input$arm_name == "Index") {
-      return()
-    }
-    
-    new_arm <- data.frame(
-      Name = input$arm_name,
-      Levels = input$arm_levels,
-      Pattern = input$arm_pattern,
-      stringsAsFactors = FALSE
-    )
-    
-    # Check for duplicate
-    current_data <- arm_data()
-    duplicate_idx <- which(current_data$Name == input$arm_name)
-    
-    if (length(duplicate_idx) > 0) {
-      # Replace existing row
-      current_data[duplicate_idx, ] <- new_arm
-      arm_data(current_data)
-    } else {
-      # Add new row
-      arm_data(rbind(current_data, new_arm))
-    }
-    updateSelectInput(session, "link_arm", choices = arm_data()$Name)
-  })
-  
-  # Add/Update Link with interaction type
-  observeEvent(input$add_link, {
-    # Create new link with current interaction state
-    current_interaction <- ifelse(input$link_distributions %% 2 == 1, "on", " ")
-    
-    new_link <- data.frame(
-      State_Variable = input$link_state,
-      State_Distribution = input$link_state_function,
-      Interaction = current_interaction,
-      Arm_Distribution = input$link_arm_function,
-      Arm_Variable = input$link_arm,
-      stringsAsFactors = FALSE
-    )
-    
-    # Check for duplicate considering interaction type
-    current_data <- link_data()
-    duplicate_idx <- which(
-      current_data$State_Variable == input$link_state & 
-      current_data$Arm_Variable == input$link_arm &
-      current_data$Interaction == current_interaction  
-    )
-    
-    if (length(duplicate_idx) > 0) {
-      # Replace existing row
-      current_data[duplicate_idx, ] <- new_link
-      link_data(current_data)
-    } else {
-      # Add new row
-      if (nrow(current_data) == 0) {
-        link_data(new_link)
-      } else {
-        link_data(rbind(current_data, new_link))
-      }
-    }
-  })
-  
-  # Link table rendering with improved remove button
+  # Table display
   output$link_table <- renderDT({
     df <- link_data()
     if (nrow(df) == 0) {
@@ -687,8 +926,42 @@ server <- function(input, output, session) {
         backgroundColor = 'white'  #  Set all cell backgrounds to white
       )
   })
-  
-  # Remove link by within-row key 
+  # Add/Update Link
+  observeEvent(input$add_link, {
+    # Create new link with current interaction state
+    current_interaction <- ifelse(input$link_distributions %% 2 == 1, "on", " ")
+    
+    new_link <- data.frame(
+      State_Variable = input$link_state,
+      State_Distribution = input$link_state_function,
+      Interaction = current_interaction,
+      Arm_Distribution = input$link_arm_function,
+      Arm_Variable = input$link_arm,
+      stringsAsFactors = FALSE
+    )
+    
+    # Check for duplicate considering interaction type
+    current_data <- link_data()
+    duplicate_idx <- which(
+      current_data$State_Variable == input$link_state & 
+      current_data$Arm_Variable == input$link_arm &
+      current_data$Interaction == current_interaction  
+    )
+    
+    if (length(duplicate_idx) > 0) {
+      # Replace existing row
+      current_data[duplicate_idx, ] <- new_link
+      link_data(current_data)
+    } else {
+      # Add new row
+      if (nrow(current_data) == 0) {
+        link_data(new_link)
+      } else {
+        link_data(rbind(current_data, new_link))
+      }
+    }
+  })
+  # Delete link
   observeEvent(input$remove_link_key, {
     if (!is.null(input$remove_link_key)) {
       # Split the composite key (now includes interaction)
@@ -707,211 +980,85 @@ server <- function(input, output, session) {
       link_data(current_links[links_to_keep, , drop = FALSE])
     }
   })
-  
-  # Remove State by Name with link cleanup
-  observeEvent(input$remove_state_name, {
-    name_to_remove <- input$remove_state_name
-    if (!is.null(name_to_remove) && !name_to_remove %in% c("Time", "Planet")) {  # Protect Time and Planet rows only
-        # First remove any links that reference this state
-        current_links <- link_data()
-        links_to_keep <- current_links$State_Variable != name_to_remove
-        link_data(current_links[links_to_keep, , drop = FALSE])
-        
-        # Then remove the state
-        current_data <- state_data()
-        current_data <- current_data[current_data$Name != name_to_remove, ]
-        state_data(current_data)
-        
-        # Update the state feature dropdown
-        updateSelectInput(session, "link_state", choices = state_data()$Name)
-    }
-  })
-  
-  # Remove Arm by Name with link cleanup
-  observeEvent(input$remove_arm_name, {
-    name_to_remove <- input$remove_arm_name
-    if (!is.null(name_to_remove) && !name_to_remove %in% c("Index", "Color", "Shape")) {  # Protect default rows
-      # First check if this arm is the only one referenced in any link
-      current_links <- link_data()
-      
-      # Count how many unique arm variables are used in links
-      unique_arms_in_links <- unique(current_links$Arm_Variable)
-      
-      # If this arm is in use and it's the only arm variable being used
-      if (name_to_remove %in% unique_arms_in_links && length(unique_arms_in_links) == 1) {
-        # Clear all links first
-        link_data(data.frame(
-          State_Variable = character(),
-          State_Distribution = character(),
-          Arm_Variable = character(),
-          Arm_Distribution = character(),
-          stringsAsFactors = FALSE
-        ))
-      } else {
-        # Remove only links that reference this arm
-        links_to_keep <- current_links$Arm_Variable != name_to_remove
-        link_data(current_links[links_to_keep, , drop = FALSE])
-      }
-      
-      # Then remove the arm
-      current_data <- arm_data()
-      current_data <- current_data[current_data$Name != name_to_remove, ]
-      arm_data(current_data)
-      
-      # Update the arm feature dropdown
-      updateSelectInput(session, "link_arm", choices = arm_data()$Name)
-    }
-  })
-  
-  # Render Tables with correct remove button functionality
-  output$state_table <- renderDT({
-    df <- state_data()
-    df$Operation <- sapply(1:nrow(df), function(i) {
-      if (df$Name[i] == "Time") {
-        # Time row is completely uneditable
-        return("")
-      } else if (df$Name[i] == "Planet") {
-        # Planet row is editable but not deletable
-        return("")
-      } else {
-        # Other rows are deletable
-        return(sprintf('<button onclick="Shiny.setInputValue(\'remove_state_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
-                      df$Name[i]))
-      }
-    })
-    
-    datatable(
-      df,
-      escape = FALSE,
-      selection = "none",
-      rownames = FALSE,
-      options = list(
-        dom = 't',
-        paging = FALSE,
-        stripeClasses = FALSE,
-        columnDefs = list(
-          list(
-            targets = "_all",
-            className = 'dt-left'
-          ),
-          list(
-            targets = ncol(df) - 1,
-            className = 'dt-center'
-          ),
-          # Time行所有列都不可编辑
-          list(
-            targets = "_all",
-            render = JS(
-              "function(data, type, row, meta) {",
-              "  if (row[0] === 'Time') {",
-              "    return '<span class=\"text-muted\">' + data + '</span>';",
-              "  }",
-              "  return data;",
-              "}"
-            )
-          )
-        ),
-        initComplete = JS(
-          "function(settings, json) {",
-          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",  # Set all rows to white first
-          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default row to gray
-          "}")
-      )
-    )
-  })
-  
-  output$arm_table <- renderDT({
-    df <- arm_data()
-    df$Operation <- sapply(1:nrow(df), function(i) {
-      if (df$Name[i] == "Index") {
-        # Index row is completely uneditable
-        return("")
-      } else if (df$Name[i] %in% c("Color", "Shape")) {
-        # Color and Shape rows are editable but not deletable
-        return("")
-      } else {
-        # Other rows are deletable
-        return(sprintf('<button onclick="Shiny.setInputValue(\'remove_arm_name\', \'%s\')" class="btn btn-danger btn-sm">Remove</button>', 
-                      df$Name[i]))
-      }
-    })
-    
-    datatable(
-      df,
-      escape = FALSE,
-      selection = "none",
-      rownames = FALSE,
-      options = list(
-        dom = 't',
-        paging = FALSE,
-        stripeClasses = FALSE,
-        columnDefs = list(
-          list(
-            targets = "_all",
-            className = 'dt-left'
-          ),
-          list(
-            targets = ncol(df) - 1,
-            className = 'dt-center'
-          ),
-          # Index行所有列都不可编辑
-          list(
-            targets = "_all",
-            render = JS(
-              "function(data, type, row, meta) {",
-              "  if (row[0] === 'Index') {",
-              "    return '<span class=\"text-muted\">' + data + '</span>';",
-              "  }",
-              "  return data;",
-              "}"
-            )
-          )
-        ),
-        initComplete = JS(
-          "function(settings, json) {",
-          "  $(this.api().rows().nodes()).css({'background-color': '#ffffff'});",  # Set all rows to white first
-          "  $(this.api().rows([0]).nodes()).css({'background-color': '#f5f5f5'});",  # Then set default row to gray
-          "}")
-      )
-    )
-  })
-  
-  # Reward Matrix Heatmap with seed control
-  reward_matrix <- reactiveVal(matrix(0, nrow = 10, ncol = 5))  # Default size
 
-  # Add function to get forced choice distribution
-  get_forced_choice_distribution <- function(num_trials, num_arms, pattern) {
-    if (num_trials <= 0) return(NULL)
+  
+  # UI display
+  # link button
+  observeEvent(input$link_distributions, {
+    # Toggle button appearance
+    shinyjs::toggleClass("link_distributions", "btn-primary")
     
-    forced_choices <- numeric(num_trials)
-    
-    if (pattern == "Equal") {
-      # Equal pattern: Assign as many trials as possible to each arm
-      repeats <- ceiling(num_trials / num_arms)
-      all_choices <- rep(1:num_arms, repeats)[1:num_trials]
-      forced_choices <- sample(all_choices) # Randomly shuffle the order
-    } else { # Unequal
-      # Generate a temporary sequence of choices: Sample with decreasing probability
-      probs <- exp(-(1:num_arms) / 2)
-      probs <- probs / sum(probs)
-      temp_choices <- sample(1:num_arms, num_trials, prob = probs, replace = TRUE)
-      # Randomly generate an arm permutation for mapping
-      arm_mapping <- sample(1:num_arms)
-      forced_choices <- arm_mapping[temp_choices]
+    # Add disabled state to inputs when unlinked
+    if (input$link_distributions %% 2 == 0) {
+      shinyjs::addCssClass("link_state", "text-muted")
+      shinyjs::addCssClass("link_state_function", "text-muted")
+      shinyjs::disable("link_state")
+      shinyjs::disable("link_state_function")
+    } else {
+      shinyjs::removeCssClass("link_state", "text-muted")
+      shinyjs::removeCssClass("link_state_function", "text-muted")
+      shinyjs::enable("link_state")
+      shinyjs::enable("link_state_function")
     }
-    return(forced_choices)
-  }
-  
-  # Create a reactive value to store the forced choice distribution
-  forced_distribution <- reactive({
-    get_forced_choice_distribution(
-      input$num_forced_choice,
-      parameters$num_arms,
-      input$forced_pattern
-    )
   })
-  
-  # Modify the reward matrix plot code
+
+
+
+
+  # Update the reward matrix and Heatmap
+
+  # 1 Automatically update reward matrix when basic parameters change
+  observeEvent(basic_update_heatmap(), {
+    # Set seed before generating new matrix
+    set.seed(parameters$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
+    reward_matrix(new_matrix)
+  })
+
+
+  # 2 Update_demo button for manual updates
+  observeEvent(input$update_demo, {
+    # Set seed before generating new matrix
+    set.seed(parameters$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
+    reward_matrix(new_matrix)
+  })
+
+
+  # 3 Check function (Only selected link)
+  observeEvent(input$check_link, {
+    # Get selected row
+    selected_row <- input$link_table_rows_selected
+    
+    if (!is.null(selected_row)) {
+      # Get selected link data
+      link <- link_data()[selected_row, , drop = FALSE]
+      
+      # Get levels for related variables
+      state_levels <- state_data()[state_data()$Name == link$State_Variable, "Levels"]
+      arm_levels <- arm_data()[arm_data()$Name == link$Arm_Variable, "Levels"]
+      
+      # Generate distribution matrix for single link
+      set.seed(parameters$seed)
+      single_matrix <- summary_reward_distribution(
+        link,  # Pass only selected link
+        state_data(), 
+        arm_data(), 
+        parameters$num_trials, 
+        parameters$num_arms
+      )
+      
+      # Update heatmap
+      reward_matrix(single_matrix)
+    } else {
+      # If no row is selected, show a warning message
+      showNotification("Please select a link first", type = "warning")
+    }
+  })
+
+
+  # Visualization
+  # Reward Matrix Plot
   output$reward_matrix <- renderPlot({
     mat <- reward_matrix()
     
@@ -971,41 +1118,7 @@ server <- function(input, output, session) {
         scale_y_continuous(expand = c(0, 0), 
             breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10)))))
   })
-  
-  # Update Demo (renamed from Generate Demo)
-  observeEvent(input$update_demo, {
-    set.seed(parameters$seed)
-    
-    # Generate base reward matrix
-    base_matrix <- summary_reward_distribution(
-      link_data(), 
-      state_data(), 
-      arm_data(), 
-      parameters$num_trials, 
-      parameters$num_arms
-    )
-    
-    # Get current noise and cost sequences
-    current_noise <- noise_sequence()
-    current_cost <- cost_sequence()
-    
-    # Generate final reward matrix
-    final_matrix <- generate_final_reward_matrix(
-      base_matrix,
-      current_noise,
-      current_cost,
-      input$reward_type
-    )
-    
-    # Update reward matrix
-    reward_matrix(final_matrix)
-    
-    # Print debug information
-    cat("Final Reward Matrix generated:\n")
-    cat("Applied Noise:", paste(current_noise, collapse = ", "), "\n")
-    cat("Applied Cost:", paste(current_cost, collapse = ", "), "\n")
-  })
-  
+
   # Save Configuration
   output$save_config <- downloadHandler(
     filename = function() {
@@ -1104,301 +1217,6 @@ server <- function(input, output, session) {
     }
   )
   
-  # Modify the link distributions observer
-  observeEvent(input$link_distributions, {
-    # Toggle button appearance
-    shinyjs::toggleClass("link_distributions", "btn-primary")
-    
-    # Add disabled state to inputs when unlinked
-    if (input$link_distributions %% 2 == 0) {
-      shinyjs::addCssClass("link_state", "text-muted")
-      shinyjs::addCssClass("link_state_function", "text-muted")
-      shinyjs::disable("link_state")
-      shinyjs::disable("link_state_function")
-    } else {
-      shinyjs::removeCssClass("link_state", "text-muted")
-      shinyjs::removeCssClass("link_state_function", "text-muted")
-      shinyjs::enable("link_state")
-      shinyjs::enable("link_state_function")
-    }
-  })
-
-  # Check function
-  observeEvent(input$check_link, {
-    # Get selected row
-    selected_row <- input$link_table_rows_selected
-    
-    if (!is.null(selected_row)) {
-      # Get selected link data
-      link <- link_data()[selected_row, , drop = FALSE]
-      
-      # Get levels for related variables
-      state_levels <- state_data()[state_data()$Name == link$State_Variable, "Levels"]
-      arm_levels <- arm_data()[arm_data()$Name == link$Arm_Variable, "Levels"]
-      
-      # Generate distribution matrix for single link
-      set.seed(parameters$seed)
-      single_matrix <- summary_reward_distribution(
-        link,  # Pass only selected link
-        state_data(), 
-        arm_data(), 
-        parameters$num_trials, 
-        parameters$num_arms
-      )
-      
-      # Update heatmap
-      reward_matrix(single_matrix)
-    } else {
-      # If no row is selected, show a warning message
-      showNotification("Please select a link first", type = "warning")
-    }
-  })
-
-  # Add a restore full view function to Update Demo button
-  observeEvent(input$update_demo, {
-    set.seed(parameters$seed)
-    new_matrix <- summary_reward_distribution(
-      link_data(), 
-      state_data(), 
-      arm_data(), 
-      parameters$num_trials, 
-      parameters$num_arms
-    )
-    reward_matrix(new_matrix)
-  })
-
-  # Create reactive values to store Noise and Cost sequences
-  noise_sequence <- reactiveVal(numeric(0))
-  cost_sequence <- reactiveVal(numeric(0))
-
-  # Helper function: Convert level to value
-  level_to_value <- function(level) {
-    switch(level,
-           "None" = 0,
-           "Low" = 1,
-           "Median" = 5,
-           "High" = 10,
-           0)  # Default value
-  }
-
-  # Helper function: Generate sequence
-  generate_sequence <- function(pattern, level, num_arms) {
-    if (pattern == "Equal") {
-      # Equal pattern: All arms use the same value
-      rep(level_to_value(level), num_arms)
-    } else {  # Unequal
-      # Randomly select from four levels
-      sample(c(0, 1, 5, 10), num_arms, replace = TRUE, prob = rep(0.25, 4))
-    }
-  }
-
-  # Observe changes in Noise settings
-  observe({
-    # Generate new noise sequence
-    new_noise <- generate_sequence(
-      input$noise_pattern,
-      input$noise_level,
-      parameters$num_arms
-    )
-    
-    # Update noise sequence
-    noise_sequence(new_noise)
-    
-    # Print results
-    cat("Noise sequence updated:\n")
-    cat("Pattern:", input$noise_pattern, "\n")
-    cat("Level:", input$noise_level, "\n")
-    cat("Values:", paste(new_noise, collapse = ", "), "\n\n")
-  })
-
-  # Observe changes in Cost settings
-  observe({
-    # Generate new cost sequence
-    new_cost <- generate_sequence(
-      input$cost_pattern,
-      input$cost_level,
-      parameters$num_arms
-    )
-    
-    # Update cost sequence
-    cost_sequence(new_cost)
-    
-    # Print results
-    cat("Cost sequence updated:\n")
-    cat("Pattern:", input$cost_pattern, "\n")
-    cat("Level:", input$cost_level, "\n")
-    cat("Values:", paste(new_cost, collapse = ", "), "\n\n")
-  })
-
-  # When num_arms changes, also update sequences
-  observeEvent(parameters$num_arms, {
-    # Update noise sequence
-    new_noise <- generate_sequence(
-      input$noise_pattern,
-      input$noise_level,
-      parameters$num_arms
-    )
-    noise_sequence(new_noise)
-    
-    # Update cost sequence
-    new_cost <- generate_sequence(
-      input$cost_pattern,
-      input$cost_level,
-      parameters$num_arms
-    )
-    cost_sequence(new_cost)
-  })
-
-  observe({
-    if (input$noise_pattern == "Unequal") {
-      shinyjs::addCssClass("noise_level", "text-muted")
-      shinyjs::disable("noise_level")
-      updateSelectInput(session, "noise_level", selected = "None")
-    } else {
-      shinyjs::removeCssClass("noise_level", "text-muted")
-      shinyjs::enable("noise_level")
-    }
-  })
-
-  observe({
-    if (input$cost_pattern == "Unequal") {
-      shinyjs::addCssClass("cost_level", "text-muted")
-      shinyjs::disable("cost_level")
-      updateSelectInput(session, "cost_level", selected = "None")
-    } else {
-      shinyjs::removeCssClass("cost_level", "text-muted")
-      shinyjs::enable("cost_level")
-    }
-  })
-
-
-  observeEvent(input$num_forced_choice, {
-    # Validate input
-    new_value <- input$num_forced_choice
-    if (is.null(new_value) || is.na(new_value) || new_value < 0 ) {
-      updateNumericInput(session, "num_forced_choice", value = 0)
-    } else if (new_value > parameters$num_trials) {
-      updateNumericInput(session, "num_forced_choice", value = parameters$num_trials)
-    } else {
-      parameters$num_forced_choice <- new_value
-    }
-  }, priority = 1000)
-
-  # Ensure forced_choice does not exceed NUM_TRIALS
-  observe({
-    # Get current num_trials value
-    max_allowed <- parameters$num_trials
-    
-    # Update num_forced_choice limit
-    updateNumericInput(session, "num_forced_choice",
-                      max = max_allowed,
-                      value = isolate({
-                        # Only update if current value exceeds new maximum
-                        current_value <- input$num_forced_choice
-                        if (is.null(current_value) || current_value > max_allowed) {
-                          max_allowed
-                        } else {
-                          current_value
-                        }
-                      }))
-  })
-
-  # Modify reward matrix generation logic
-  generate_final_reward_matrix <- function(base_matrix, noise_seq, cost_seq, reward_type) {
-    num_trials <- nrow(base_matrix)
-    num_arms <- ncol(base_matrix)
-    final_matrix <- base_matrix
-    
-    # Apply noise
-    for (arm in 1:num_arms) {
-      if (noise_seq[arm] > 0) {
-        # Generate noise
-        noise <- rnorm(num_trials, mean = 0, sd = noise_seq[arm])
-        final_matrix[, arm] <- final_matrix[, arm] + noise
-      }
-    }
-    
-    # Apply cost
-    for (arm in 1:num_arms) {
-      if (cost_seq[arm] > 0) {
-        final_matrix[, arm] <- final_matrix[, arm] - cost_seq[arm]
-      }
-    }
-    
-    # Truncate to valid range
-    if (reward_type == "binary") {
-      final_matrix <- pmax(pmin(final_matrix, 100), 0) / 100  # Truncate to [0,1]
-    } else {
-      final_matrix <- pmax(pmin(final_matrix, 100), 0)  # Truncate to [0,100]
-    }
-    
-    return(final_matrix)
-  }
-
-  # Modify Update Demo button processing logic
-  observeEvent(input$update_demo, {
-    # Set random seed
-    set.seed(parameters$seed)
-    
-    # Generate base reward matrix
-    base_matrix <- summary_reward_distribution(
-      link_data(), 
-      state_data(), 
-      arm_data(), 
-      parameters$num_trials, 
-      parameters$num_arms
-    )
-    
-    # Get current noise and cost sequences
-    current_noise <- noise_sequence()
-    current_cost <- cost_sequence()
-    
-    # Generate final reward matrix
-    final_matrix <- generate_final_reward_matrix(
-      base_matrix,
-      current_noise,
-      current_cost,
-      input$reward_type
-    )
-    
-    # Update reward matrix
-    reward_matrix(final_matrix)
-    
-    # Print debug information
-    cat("Final Reward Matrix generated:\n")
-    cat("Applied Noise:", paste(current_noise, collapse = ", "), "\n")
-    cat("Applied Cost:", paste(current_cost, collapse = ", "), "\n")
-  })
-
-  # Modify auto_update_trigger processing
-  observeEvent(auto_update_trigger(), {
-    # Set random seed
-    set.seed(parameters$seed)
-    
-    # Generate base reward matrix
-    base_matrix <- summary_reward_distribution(
-      link_data(), 
-      state_data(), 
-      arm_data(), 
-      parameters$num_trials, 
-      parameters$num_arms
-    )
-    
-    # Get current noise and cost sequences
-    current_noise <- noise_sequence()
-    current_cost <- cost_sequence()
-    
-    # Generate final reward matrix
-    final_matrix <- generate_final_reward_matrix(
-      base_matrix,
-      current_noise,
-      current_cost,
-      input$reward_type
-    )
-    
-    # Update reward matrix
-    reward_matrix(final_matrix)
-  })
 
 }
 

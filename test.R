@@ -60,6 +60,14 @@
 
 
 
+observeEvent(input$update_demo, {
+    # Set seed before generating new matrix
+    set.seed(basic_parameters$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), basic_parameters$num_trials, basic_parameters$num_arms)
+    reward_matrix(new_matrix)
+  })
+  
+
   # Modify Update Demo button processing logic
   observeEvent(input$update_demo, {
     # Set random seed

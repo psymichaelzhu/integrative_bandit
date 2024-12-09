@@ -1,6 +1,6 @@
 // Basic Parameters
 const NUM_TRIALS = 10;
-const NUM_ARMS = 5;
+const NUM_ARMS = 7;
 const REWARD_TYPE = 'numeric';
 const FEEDBACK_VERSION = 'contingent';
 const COVER_STORY = 'non-social';
@@ -29,14 +29,10 @@ const STATE_VARIABLES = {
 
 // Arm Variables
 const ARM_VARIABLES = {
-  Index: {levels: 5, pattern: 'Loop'},
+  Index: {levels: 7, pattern: 'Loop'},
   Color: {levels: 1, pattern: 'Shuffle'},
   Shape: {levels: 1, pattern: 'Shuffle'}
 };
 
 // Distribution Links
-const DISTRIBUTION_LINKS = [
-  {stateVariable: ' ', stateDistribution: ' ', interaction: ' ', armDistribution: 'Identical', armVariable: 'Index'},
-  {stateVariable: 'Time', stateDistribution: 'Random Walk', interaction: 'on', armDistribution: 'Identical', armVariable: 'Index'},
-  {stateVariable: 'Time', stateDistribution: 'Independent', interaction: 'on', armDistribution: 'Identical', armVariable: 'Shape'}
-];
+const DISTRIBUTION_LINKS = [];

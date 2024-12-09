@@ -54,20 +54,7 @@
   # Ensure forced_choice does not exceed NUM_TRIALS
   observe({
     # Get current num_trials value
-    max_allowed <- parameters$num_trials
     
-    # Update num_forced_choice limit
-    updateNumericInput(session, "num_forced_choice",
-                      max = max_allowed,
-                      value = isolate({
-                        # Only update if current value exceeds new maximum
-                        current_value <- input$num_forced_choice
-                        if (is.null(current_value) || current_value > max_allowed) {
-                          max_allowed
-                        } else {
-                          current_value
-                        }
-                      }))
   })
 
 

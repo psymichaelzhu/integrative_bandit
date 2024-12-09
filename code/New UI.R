@@ -434,14 +434,14 @@ get_forced_choice_distribution <- function(num_forced_choice, num_arms, pattern)
   }
 
 # Create a new function to generate configuration lines
-generate_config_lines <- function(parameters, input, state_data, arm_data, link_data) {
+generate_config_lines <- function(basic_parameters, input, state_data, arm_data, link_data) {
   lines <- c()
   
-  # Add parameters section
+  # Add basic_parameters section
   lines <- c(lines,
             "// Basic Parameters",
-            paste0("const NUM_TRIALS = ", parameters$num_trials, ";"),
-            paste0("const NUM_ARMS = ", parameters$num_arms, ";"),
+            paste0("const NUM_TRIALS = ", basic_parameters$num_trials, ";"),
+            paste0("const NUM_ARMS = ", basic_parameters$num_arms, ";"),
             paste0("const REWARD_TYPE = '", input$reward_type, "';"),
             paste0("const FEEDBACK_VERSION = '", input$feedback_version, "';"),
             paste0("const COVER_STORY = '", input$cover_story, "';"),
@@ -524,8 +524,8 @@ generate_config_lines <- function(parameters, input, state_data, arm_data, link_
 
 server <- function(input, output, session) {
   # 0 Reactive Variables
-  # Define parameters reactiveValues first
-  parameters <- reactiveValues(
+  # Define basic_parameters reactiveValues first
+  basic_parameters <- reactiveValues(
     num_trials = 10,
     num_arms = 5,
     seed = 42
@@ -533,9 +533,9 @@ server <- function(input, output, session) {
   
   basic_update_heatmap <- reactive({
     list(
-      parameters$num_trials,
-      parameters$num_arms,
-      parameters$seed
+      basic_parameters$num_trials,
+      basic_parameters$num_arms,
+      basic_parameters$seed
     )
   })
 
@@ -543,9 +543,9 @@ server <- function(input, output, session) {
   forced_distribution <- reactive({
     get_forced_choice_distribution(
       input$num_forced_choice,
-      parameters$num_arms,
+      basic_parameters$num_arms,
       input$forced_pattern,
-      parameters$num_trials
+      basic_parameters$num_trials
     )
   })
   noise_sequence <- reactiveVal(numeric(0))
@@ -588,38 +588,38 @@ server <- function(input, output, session) {
   observeEvent(input$num_trials, {
     new_value <- input$num_trials
     if (is.null(new_value) || is.na(new_value) || new_value < 1) {
-      updateNumericInput(session, "num_trials", value = parameters$num_trials)
+      updateNumericInput(session, "num_trials", value = basic_parameters$num_trials)
     } else {
-      parameters$num_trials <- new_value
+      basic_parameters$num_trials <- new_value
     }
   })
 
   observeEvent(input$num_arms, {
     new_value <- input$num_arms
     if (is.null(new_value) || is.na(new_value) || new_value < 1) {
-      updateNumericInput(session, "num_arms", value = parameters$num_arms)
+      updateNumericInput(session, "num_arms", value = basic_parameters$num_arms)
     } else {
-      parameters$num_arms <- new_value
+      basic_parameters$num_arms <- new_value
     }
   })
 
   observeEvent(input$seed, {
     new_value <- input$seed
     if (is.null(new_value) || is.na(new_value) || new_value < 1) {
-      updateNumericInput(session, "seed", value = parameters$seed)
+      updateNumericInput(session, "seed", value = basic_parameters$seed)
     } else {
-      parameters$seed <- new_value
+      basic_parameters$seed <- new_value
     }
   })
 
   # Chain Reaction
-  observeEvent(parameters$num_arms, {
-    # If parameters$num_arms change, valid num_arms
+  observeEvent(basic_parameters$num_arms, {
+    # If basic_parameters$num_arms change, valid num_arms
     # Update arm_data (Arm Levels) when num_arms changes
     current_data <- arm_data()
     position_row <- which(current_data$Name == "Index")
     if (length(position_row) > 0) {
-      current_data$Levels[position_row] <- parameters$num_arms
+      current_data$Levels[position_row] <- basic_parameters$num_arms
       arm_data(current_data)
     }
 
@@ -627,7 +627,7 @@ server <- function(input, output, session) {
     new_noise <- generate_sequence(
       input$noise_pattern,
       input$noise_level,
-      parameters$num_arms
+      basic_parameters$num_arms
     )
     noise_sequence(new_noise)
     
@@ -635,18 +635,33 @@ server <- function(input, output, session) {
     new_cost <- generate_sequence(
       input$cost_pattern,
       input$cost_level,
-      parameters$num_arms
+      basic_parameters$num_arms
     )
     cost_sequence(new_cost)
   })
 
-  observeEvent(parameters$num_trials, {
+  observeEvent(basic_parameters$num_trials, {
+    # Update state_data (Trial Levels) when num_trials changes
     current_data <- state_data()
     time_row <- which(current_data$Name == "Time")
     if (length(time_row) > 0) {
-      current_data$Levels[time_row] <- parameters$num_trials
+      current_data$Levels[time_row] <- basic_parameters$num_trials
       state_data(current_data)
     }
+    # check forced choice validity
+    max_allowed <- basic_parameters$num_trials
+    # Update num_forced_choice limit
+    updateNumericInput(session, "num_forced_choice",
+                      max = max_allowed,
+                      value = isolate({
+                        # Only update if current value exceeds new maximum
+                        current_value <- input$num_forced_choice
+                        if (is.null(current_value) || current_value > max_allowed) {
+                          max_allowed
+                        } else {
+                          current_value
+                        }
+                      }))
   })
 
   # Asymmetry Section
@@ -898,10 +913,10 @@ server <- function(input, output, session) {
     new_value <- input$num_forced_choice
     if (is.null(new_value) || is.na(new_value) || new_value < 0 ) { #valid value
       updateNumericInput(session, "num_forced_choice", value = 0)
-    } else if (new_value > parameters$num_trials) {
-      updateNumericInput(session, "num_forced_choice", value = parameters$num_trials)
+    } else if (new_value > basic_parameters$num_trials) {
+      updateNumericInput(session, "num_forced_choice", value = basic_parameters$num_trials)
     } else {
-      parameters$num_forced_choice <- new_value
+      basic_parameters$num_forced_choice <- new_value
     }
   }, priority = 1000)
 
@@ -1091,8 +1106,8 @@ server <- function(input, output, session) {
   # 1 Automatically update reward matrix when basic parameters change
   observeEvent(basic_update_heatmap(), {
     # Set seed before generating new matrix
-    set.seed(parameters$seed)
-    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
+    set.seed(basic_parameters$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), basic_parameters$num_trials, basic_parameters$num_arms)
     reward_matrix(new_matrix)
   })
 
@@ -1100,8 +1115,8 @@ server <- function(input, output, session) {
   # 2 Update_demo button for manual updates
   observeEvent(input$update_demo, {
     # Set seed before generating new matrix
-    set.seed(parameters$seed)
-    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), parameters$num_trials, parameters$num_arms)
+    set.seed(basic_parameters$seed)
+    new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), basic_parameters$num_trials, basic_parameters$num_arms)
     reward_matrix(new_matrix)
   })
 
@@ -1120,13 +1135,13 @@ server <- function(input, output, session) {
       arm_levels <- arm_data()[arm_data()$Name == link$Arm_Variable, "Levels"]
       
       # Generate distribution matrix for single link
-      set.seed(parameters$seed)
+      set.seed(basic_parameters$seed)
       single_matrix <- summary_reward_distribution(
         link,  # Pass only selected link
         state_data(), 
         arm_data(), 
-        parameters$num_trials, 
-        parameters$num_arms
+        basic_parameters$num_trials, 
+        basic_parameters$num_arms
       )
       
       # Update heatmap
@@ -1200,27 +1215,27 @@ server <- function(input, output, session) {
             breaks = function(x) unique(round(pretty(seq(x[1], x[2], length.out = 10)))))
   })
 
+
+
+  # Generate config text
+  config_text <- reactiveVal("")
+  observe({
+    lines <- generate_config_lines(basic_parameters, input, state_data, arm_data, link_data)
+    config_text(paste(lines, collapse = "\n"))
+  })
+
   # Save Configuration
   output$save_config <- downloadHandler(
     filename = function() {
       paste("Bandit_config.js", sep = "")
     },
     content = function(file) {
-      lines <- generate_config_lines(parameters, input, state_data, arm_data, link_data)
+      lines <- config_text()
       writeLines(lines, file)
     }
   )
 
-  # Add new reactive value for config text
-  config_text <- reactiveVal("")
-  
-  # Update config text whenever relevant inputs change
-  observe({
-    lines <- generate_config_lines(parameters, input, state_data, arm_data, link_data)
-    config_text(paste(lines, collapse = "\n"))
-  })
-  
-  # Add clipboard button
+  # Copy to clipboard
   output$clip <- renderUI({
     rclipButton(
       inputId = "copy_config",
@@ -1230,8 +1245,6 @@ server <- function(input, output, session) {
       class = "btn-info"
     )
   })
-  
-  # Optional: Add success message when copied
   observeEvent(input$copy_config, {
     showNotification("Configuration copied to clipboard!", type = "message")
   })

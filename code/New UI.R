@@ -40,8 +40,7 @@ ui <- fluidPage(
     column(4, numericInput("seed", "Seed (Only for UI Illustration)", value = 42, min = 1))
   ),
 
-  
-  
+
   # State and Arm Variables Configuration (side by side)
   fluidRow(
     # State Variables Configuration
@@ -58,7 +57,7 @@ ui <- fluidPage(
                               choices = c("Shuffle", "Loop", "Random"))),
              column(3, 
                     div(style = "margin-top: 25px;", 
-                        actionButton("add_state", "Update", 
+                        actionButton("add_state", "Add", 
                                    class = "btn-info btn-sm",
                                    style = "width: 60px;")))
            ),
@@ -79,7 +78,7 @@ ui <- fluidPage(
                               choices = c("Shuffle", "Loop", "Random"))),
              column(3, 
                     div(style = "margin-top: 25px;", 
-                        actionButton("add_arm", "Update", 
+                        actionButton("add_arm", "Add", 
                                    class = "btn-info btn-sm",
                                    style = "width: 60px;")))
            ),
@@ -93,7 +92,7 @@ ui <- fluidPage(
            h4("Reward Distribution Configuration"),
            fluidRow(
              column(2, 
-                    selectInput("function", "Function", 
+                    selectInput("reward_function", "Function", 
                               choices = c("Identical", "Independent", "Monotonic", "Random Walk"),
                               selected = "Identical"),
                     style = "padding-right: 5px;"),
@@ -130,7 +129,7 @@ ui <- fluidPage(
                     style = "width: 8%;")
            ),
            div(style = "padding: 0 15px;",
-               DTOutput("dist_table"))
+               DTOutput("reward_table"))
     )
   ),
   
@@ -664,8 +663,48 @@ server <- function(input, output, session) {
     }
   })
   
-  #Update field
+  # Add Reward
+  observeEvent(input$add_reward, {
+    new_reward <- data.frame(
+      Function = input$reward_function,
+      Type1 = input$type1,
+      Name1 = input$name1,
+      Conditional = input$conditional,
+      Type2 = ifelse(input$conditional, input$type2, ""),
+      Name2 = ifelse(input$conditional, input$name2, ""),
+      stringsAsFactors = FALSE
+    )
+    
+    # Check for duplicate
+    current_data <- reward_data()
+    duplicate_idx <- which(current_data$Type1 == new_reward$Type1 & 
+                           current_data$Name1 == new_reward$Name1 & 
+                           current_data$Type2 == new_reward$Type2 & 
+                           current_data$Name2 == new_reward$Name2)
+    
+    if (length(duplicate_idx) > 0) {
+      # Replace existing row
+      current_data[duplicate_idx, ] <- new_reward
+    } else {
+      # Add new row
+      current_data <- rbind(current_data, new_reward)
+    }
+    reward_data(current_data)
+  })
 
+  
+
+  # Display Reward Table
+  output$reward_table <- renderDT({
+    datatable(
+      reward_data(),
+      options = list(
+        dom = 't',
+        paging = FALSE,
+        stripeClasses = FALSE
+      )
+    )
+  })
   
 
   # Generate config text
@@ -695,6 +734,7 @@ server <- function(input, output, session) {
   observeEvent(input$copy_config, {
     showNotification("Configuration copied to clipboard!", type = "message")
   })
+
 
 }
 

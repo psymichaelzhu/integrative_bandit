@@ -1,7 +1,78 @@
 
 
+  # Reward Distribution Configuration
+  fluidRow(
+    column(12,
+           h4("Reward Distribution Configuration"),
+           fluidRow(
+             column(3, 
+                    selectInput("link_state", "State Variable", 
+                            choices = "Time",  # 初始只有Time选项
+                            selected = "Time"),
+                    style = "padding-right: 5px; width: 21%;"),
+             column(3, 
+                    selectInput("link_state_function", "State Distribution", 
+                            choices = "Identical",  # 初始只有Identical选项
+                            selected = "Identical"),
+                    style = "padding-right: 5px; width: 21%;"),
+             column(1,
+                    div(style = "margin-top: 25px; width: 100%; text-align: center;",
+                        actionButton("link_distributions", "",
+                                   icon = icon("link"),
+                                   class = "btn-sm",
+                                   style = "padding: 6px 8px;")),
+                    style = "width: 8%;"),
+             column(3, 
+                    selectInput("link_arm_function", "Arm Distribution", 
+                              choices = c("Identical", "Independent", "Monotonic", "Random Walk")),
+                    style = "padding-left: 5px; width: 21%;"),
+             column(2, 
+                    selectInput("link_arm", "Arm Variable", choices = NULL),
+                    style = "padding-left: 5px; width: 21%;"),
+             column(1, 
+                    div(style = "margin-top: 25px;", 
+                        actionButton("add_link", "Add", 
+                                   class = "btn-info btn-sm",
+                                   style = "width: 50px;")),
+                    style = "width: 8%;")
+           ),
+           div(style = "padding: 0 15px;",
+               DTOutput("link_table"))
+    )
+  ),
+  
 
 数量问题
+
+  # Chain Reaction
+  observeEvent(basic_parameters$num_arms, {
+    # If basic_parameters$num_arms change, valid num_arms
+    # Update arm_data (Arm Levels) when num_arms changes
+    current_data <- arm_data()
+    position_row <- which(current_data$Name == "Index")
+    if (length(position_row) > 0) {
+      current_data$Levels[position_row] <- basic_parameters$num_arms
+      arm_data(current_data)
+    }
+
+    # Update noise sequence
+    new_noise <- generate_sequence(
+      input$noise_pattern,
+      input$noise_level,
+      basic_parameters$num_arms
+    )
+    noise_sequence(new_noise)
+    
+    # Update cost sequence
+    new_cost <- generate_sequence(
+      input$cost_pattern,
+      input$cost_level,
+      basic_parameters$num_arms
+    )
+    cost_sequence(new_cost)
+  })
+
+
 
 
 
@@ -66,7 +137,7 @@ observeEvent(input$update_demo, {
     new_matrix <- summary_reward_distribution(link_data(), state_data(), arm_data(), basic_parameters$num_trials, basic_parameters$num_arms)
     reward_matrix(new_matrix)
   })
-  
+
 
   # Modify Update Demo button processing logic
   observeEvent(input$update_demo, {

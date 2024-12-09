@@ -40,18 +40,6 @@
             }
           },
           {
-            "id": "f411401fe6009913",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "code/Document.md",
-                "mode": "source",
-                "source": false
-              }
-            }
-          },
-          {
             "id": "55875277a705a218",
             "type": "leaf",
             "state": {
@@ -64,7 +52,25 @@
             }
           }
         ],
-        "currentTab": 3
+        "currentTab": 2
+      },
+      {
+        "id": "9f70090fc9e9db78",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f411401fe6009913",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "code/Computation.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          }
+        ]
       }
     ],
     "direction": "vertical"
@@ -191,24 +197,28 @@
       "command-palette:打开命令面板": false
     }
   },
-  "active": "f411401fe6009913",
+  "active": "b5692643fc5bd501",
   "lastOpenFiles": [
-    "JATOS.md",
+    "code/New UI.R",
+    "code/New UI.py",
+    "Document_UI.pdf",
+    "code/Computation.md",
     "code/Document.md",
-    "Pasted image 20241208124540.png",
-    "Pasted image 20241208124526.png",
-    "Pasted image 20241208123824.png",
-    "Pasted image 20241208123521.png",
+    "Pasted image 20241208183849.png",
+    "Pasted image 20241208183817.png",
+    "code/image.png",
+    "Pasted image 20241208182101.png",
+    "Pasted image 20241208181458.png",
+    "Pasted image 20241208180812.png.md",
+    "Pasted image 20241208180712.png",
+    "Pasted image 20241208180647.png",
+    "Pasted image 20241208180610.png",
+    "Pasted image 20241208180418.png",
+    "Pasted image 20241208180252.png",
+    "JATOS.md",
     "未命名.md",
     "未命名 1.md",
-    "Pasted image 20241208123506.png",
-    "Pasted image 20241208122603.png",
-    "Pasted image 20241208122414.png",
-    "Pasted image 20241208111755.png",
-    "Pasted image 20241208111643.png",
-    "Pasted image 20241208111511.png",
     "Document.pdf",
-    "~$icon.pptx",
-    "code/Computation.md"
+    "~$icon.pptx"
   ]
 }

@@ -415,7 +415,7 @@ generate_final_reward_matrix <- function(base_matrix, noise_seq, cost_seq, rewar
 get_forced_choice_distribution <- function(num_forced_choice, num_arms, pattern) {
     if (num_forced_choice <= 0) return(NULL)
     
-    forced_choices <- numeric(num_trials)
+    forced_choices <- numeric(num_forced_choice)
     
     if (pattern == "Equal") {
       # Equal pattern: Assign as many trials as possible to each arm
@@ -544,8 +544,7 @@ server <- function(input, output, session) {
     get_forced_choice_distribution(
       input$num_forced_choice,
       basic_parameters$num_arms,
-      input$forced_pattern,
-      basic_parameters$num_trials
+      input$forced_pattern
     )
   })
   noise_sequence <- reactiveVal(numeric(0))
@@ -689,6 +688,18 @@ server <- function(input, output, session) {
     }
   })
 
+  # Forced Choice field, safety check
+  observeEvent(input$num_forced_choice, {
+    # Validate input
+    new_value <- input$num_forced_choice
+    if (is.null(new_value) || is.na(new_value) || new_value < 0 ) { #valid value
+      updateNumericInput(session, "num_forced_choice", value = 0)
+    } else if (new_value > basic_parameters$num_trials) {
+      updateNumericInput(session, "num_forced_choice", value = basic_parameters$num_trials)
+    } else {
+      basic_parameters$num_forced_choice <- new_value
+    }
+  }, priority = 1000)
 
   # Feature Section
 
@@ -905,24 +916,8 @@ server <- function(input, output, session) {
   })
 
 
-  # UI display
-  # Safety check
-  # Forced Choice field, safety check
-  observeEvent(input$num_forced_choice, {
-    # Validate input
-    new_value <- input$num_forced_choice
-    if (is.null(new_value) || is.na(new_value) || new_value < 0 ) { #valid value
-      updateNumericInput(session, "num_forced_choice", value = 0)
-    } else if (new_value > basic_parameters$num_trials) {
-      updateNumericInput(session, "num_forced_choice", value = basic_parameters$num_trials)
-    } else {
-      basic_parameters$num_forced_choice <- new_value
-    }
-  }, priority = 1000)
-
 
   # Reward Section
-
   #Update field
   observe({
     if (is.null(input$link_distributions)) {

@@ -92,39 +92,45 @@ ui <- fluidPage(
     column(12,
            h4("Reward Distribution Configuration"),
            fluidRow(
-             column(3, 
-                    selectInput("link_state", "State Variable", 
-                            choices = "Time",  # 初始只有Time选项
-                            selected = "Time"),
-                    style = "padding-right: 5px; width: 21%;"),
-             column(3, 
-                    selectInput("link_state_function", "State Distribution", 
-                            choices = "Identical",  # 初始只有Identical选项
-                            selected = "Identical"),
-                    style = "padding-right: 5px; width: 21%;"),
-             column(1,
-                    div(style = "margin-top: 25px; width: 100%; text-align: center;",
-                        actionButton("link_distributions", "",
-                                   icon = icon("link"),
-                                   class = "btn-sm",
-                                   style = "padding: 6px 8px;")),
-                    style = "width: 8%;"),
-             column(3, 
-                    selectInput("link_arm_function", "Arm Distribution", 
-                              choices = c("Identical", "Independent", "Monotonic", "Random Walk")),
-                    style = "padding-left: 5px; width: 21%;"),
              column(2, 
-                    selectInput("link_arm", "Arm Variable", choices = NULL),
-                    style = "padding-left: 5px; width: 21%;"),
+                    selectInput("function", "Function", 
+                              choices = c("Identical", "Independent", "Monotonic", "Random Walk"),
+                              selected = "Identical"),
+                    style = "padding-right: 5px;"),
+             column(2, 
+                    selectInput("type1", "Type", 
+                              choices = c("State", "Arm"),
+                              selected = "State"),
+                    style = "padding-right: 5px;"),
+             column(2, 
+                    selectInput("name1", "Name", 
+                              choices = NULL),
+                    style = "padding-right: 5px;"),
+             column(1,
+                    div(style = "margin-top: 5px; width: 100%; text-align: left;",
+                        h6(style = "margin: 0;", "On "),
+                        checkboxInput("conditional", "", value = FALSE)),
+                    style = "width: 8%;"),
+             column(2, 
+                    textInput("type2", "Type", 
+                             value = "Arm") %>% 
+                      tagAppendChild(
+                        tags$script("$('#type2').prop('readonly', true);")
+                      ),
+                    style = "padding-left: 5px;"),
+             column(2, 
+                    selectInput("name2", "Name", 
+                              choices = NULL),
+                    style = "padding-left: 5px;"),
              column(1, 
                     div(style = "margin-top: 25px;", 
-                        actionButton("add_link", "Add", 
+                        actionButton("add_reward", "Add", 
                                    class = "btn-info btn-sm",
                                    style = "width: 50px;")),
                     style = "width: 8%;")
            ),
            div(style = "padding: 0 15px;",
-               DTOutput("link_table"))
+               DTOutput("dist_table"))
     )
   ),
   
@@ -289,12 +295,13 @@ server <- function(input, output, session) {
     Pattern = c("Loop", "Shuffle", "Shuffle"),
     stringsAsFactors = FALSE
   ))
-  link_data <- reactiveVal(data.frame(
-    State_Variable = character(),
-    State_Distribution = character(),
-    Interaction = character(),
-    Arm_Distribution = character(),
-    Arm_Variable = character(),
+  reward_data <- reactiveVal(data.frame(
+    Function = character(),
+    Type1 = character(),
+    Name1 = character(),
+    Conditional = logical(),
+    Type2 = character(),
+    Name2 = character(),
     stringsAsFactors = FALSE
   ))
 
@@ -302,7 +309,6 @@ server <- function(input, output, session) {
 
   # 1 Basic Section
   # Valid update
-  
   observeEvent(input$num_trials, {
     new_value <- input$num_trials
     if (is.null(new_value) || is.na(new_value) || new_value < 1) {
@@ -621,187 +627,49 @@ server <- function(input, output, session) {
 
 
   # Reward Section
-  #Update field
-  observe({
-    if (is.null(input$link_distributions)) {
-      updateActionButton(session, "link_distributions", value = 0)
-    }
-    current_state <- input$link_state
-    current_arm <- input$link_arm
-    state_choices <- state_data()$Name
-    arm_choices <- arm_data()$Name
-    if (input$link_distributions %% 2 == 1) {
-      updateSelectInput(session, "link_state", 
-                       choices = state_choices,
-                       selected = if (current_state %in% state_choices) current_state else state_choices[1])
-      updateSelectInput(session, "link_state_function",
-                       choices = c("Independent", "Monotonic", "Random Walk"),
-                       selected = "Independent")
+  # Reward UI
+  observeEvent(input$type1, {
+    # Update name1 choices based on type1
+    if (input$type1 == "State") {
+      updateSelectInput(session, "name1", choices = state_data()$Name)
     } else {
-      updateSelectInput(session, "link_state",
-                       choices = " ",
-                       selected = " ")
-      updateSelectInput(session, "link_state_function",
-                       choices = " ",
-                       selected = " ")
-      
-      shinyjs::addCssClass("link_state", "text-muted")
-      shinyjs::addCssClass("link_state_function", "text-muted")
-      shinyjs::disable("link_state")
-      shinyjs::disable("link_state_function")
+      updateSelectInput(session, "name1", choices = arm_data()$Name)
     }
-   
-    updateSelectInput(session, "link_arm", 
-                     choices = arm_choices,
-                     selected = if (current_arm %in% arm_choices) current_arm else arm_choices[1])
-  }, priority = 1000)  
-  
-  
-  # Table display
-  output$link_table <- renderDT({
-    df <- link_data()
-    if (nrow(df) == 0) {
-      df <- data.frame(
-        State_Variable = character(),
-        State_Distribution = character(),
-        Interaction = character(),
-        Arm_Distribution = character(),
-        Arm_Variable = character(),
-        Operation = character(),
-        stringsAsFactors = FALSE
-      )
-    } else {
-      df$Operation <- sapply(1:nrow(df), function(i) {
-        # Include interaction type in the composite key
-        sprintf('<button onclick="Shiny.setInputValue(\'remove_link_key\', \'%s|%s|%s\')" class="btn btn-danger btn-sm">Remove</button>', 
-                df$State_Variable[i], df$Arm_Variable[i], df$Interaction[i])
-      })
-    }
-    
-    colnames(df) <- c("State Variable", "State Distribution", 
-                      "Interaction", "Arm Distribution", 
-                      "Arm Variable", "Operation")
-    datatable(
-      df,
-      escape = FALSE,
-      selection = 'single',  #  Allow single row selection
-      rownames = FALSE,
-      options = list(
-        dom = 't',
-        paging = FALSE,
-        scrollX = FALSE,
-        stripeClasses = FALSE,  #  Disable striped style
-        columnDefs = list(
-          list(
-            targets = "_all",
-            className = 'dt-center'
-          ),
-          list(
-            targets = c(0, 1, 3, 4),  # State and Arm columns
-            width = "20%"
-          ),
-          list(
-            targets = 2,    # Interaction column
-            width = "8%"
-          ),
-          list(
-            targets = 5,    # Operation column
-            width = "12%"
-          ),
-          list(
-            targets = "_all",
-            headerClassName = 'dt-left'
-          )
-        )
-      )
-    ) %>% 
-      formatStyle(
-        columns = 1:6,
-        backgroundColor = 'white'  #  Set all cell backgrounds to white
-      )
   })
-  # Add/Update Link
-  observeEvent(input$add_link, {
-    # Create new link with current interaction state
-    current_interaction <- ifelse(input$link_distributions %% 2 == 1, "on", " ")
-    
-    new_link <- data.frame(
-      State_Variable = input$link_state,
-      State_Distribution = input$link_state_function,
-      Interaction = current_interaction,
-      Arm_Distribution = input$link_arm_function,
-      Arm_Variable = input$link_arm,
-      stringsAsFactors = FALSE
-    )
-    
-    # Check for duplicate considering interaction type
-    current_data <- link_data()
-    duplicate_idx <- which(
-      current_data$State_Variable == input$link_state & 
-      current_data$Arm_Variable == input$link_arm &
-      current_data$Interaction == current_interaction  
-    )
-    
-    if (length(duplicate_idx) > 0) {
-      # Replace existing row
-      current_data[duplicate_idx, ] <- new_link
-      link_data(current_data)
+  observe({
+    if (!input$conditional) {
+      # Disable and clear Type2 and Name2 when conditional is unchecked
+      shinyjs::addCssClass("type2", "text-muted")
+      shinyjs::addCssClass("name2", "text-muted")
+      shinyjs::disable("type2")
+      shinyjs::disable("name2")
+      # Set empty value for Type2 and clear Name2 choices
+      updateTextInput(session, "type2", value = "")
+      updateSelectInput(session, "name2", choices = "")
     } else {
-      # Add new row
-      if (nrow(current_data) == 0) {
-        link_data(new_link)
+      # Enable and update when conditional is checked
+      shinyjs::removeCssClass("type2", "text-muted")
+      shinyjs::removeCssClass("name2", "text-muted")
+      shinyjs::enable("type2")
+      shinyjs::enable("name2")
+      
+      # Set opposite type for type2 based on type1
+      if (input$type1 == "State") {
+        updateTextInput(session, "type2", value = "Arm")
+        updateSelectInput(session, "name2", choices = arm_data()$Name)
       } else {
-        link_data(rbind(current_data, new_link))
+        updateTextInput(session, "type2", value = "State")
+        updateSelectInput(session, "name2", choices = state_data()$Name)
       }
     }
   })
-  # Delete link
-  observeEvent(input$remove_link_key, {
-    if (!is.null(input$remove_link_key)) {
-      # Split the composite key (now includes interaction)
-      key_parts <- strsplit(input$remove_link_key, "\\|")[[1]]
-      state_feature <- key_parts[1]
-      arm_feature <- key_parts[2]
-      interaction_type <- key_parts[3]
-      
-      # Remove the link considering all three components
-      current_links <- link_data()
-      links_to_keep <- !(current_links$State_Variable == state_feature & 
-                        current_links$Arm_Variable == arm_feature &
-                        current_links$Interaction == interaction_type)
-      
-      # Update with remaining links
-      link_data(current_links[links_to_keep, , drop = FALSE])
-    }
-  })
+  
+  #Update field
 
   
-  # UI display
-  # link button
-  observeEvent(input$link_distributions, {
-    # Toggle button appearance
-    shinyjs::toggleClass("link_distributions", "btn-primary")
-    
-    # Add disabled state to inputs when unlinked
-    if (input$link_distributions %% 2 == 0) {
-      shinyjs::addCssClass("link_state", "text-muted")
-      shinyjs::addCssClass("link_state_function", "text-muted")
-      shinyjs::disable("link_state")
-      shinyjs::disable("link_state_function")
-    } else {
-      shinyjs::removeCssClass("link_state", "text-muted")
-      shinyjs::removeCssClass("link_state_function", "text-muted")
-      shinyjs::enable("link_state")
-      shinyjs::enable("link_state_function")
-    }
-  })
 
   # Generate config text
   config_text <- reactiveVal("")
-  observe({
-    lines <- generate_config_lines(basic_parameters, input, state_data, arm_data, link_data)
-    config_text(paste(lines, collapse = "\n"))
-  })
 
   # Save Configuration
   output$save_config <- downloadHandler(
@@ -827,6 +695,7 @@ server <- function(input, output, session) {
   observeEvent(input$copy_config, {
     showNotification("Configuration copied to clipboard!", type = "message")
   })
+
 }
 
 # Run App =====================================================================

@@ -301,7 +301,6 @@ server <- function(input, output, session) {
     Conditional = logical(),
     Type2 = character(),
     Name2 = character(),
-    Operation = character(),  # Initialize with an empty Operation column
     stringsAsFactors = FALSE
   ))
 
@@ -580,10 +579,13 @@ server <- function(input, output, session) {
   observeEvent(input$remove_state_name, {
     name_to_remove <- input$remove_state_name
     if (!is.null(name_to_remove) && !name_to_remove %in% c("Time", "Planet")) {  # Time and Planet are not deletable
-        # First remove any links that reference this state
-        current_links <- link_data()
-        links_to_keep <- current_links$State_Variable != name_to_remove
-        link_data(current_links[links_to_keep, , drop = FALSE])
+        # Remove any rewards associated with this state
+        current_rewards <- reward_data()
+        rewards_to_keep <- !(
+            (current_rewards$Type1 == "State" & current_rewards$Name1 == name_to_remove) |
+            (current_rewards$Type2 == "State" & current_rewards$Name2 == name_to_remove)
+        )
+        reward_data(current_rewards[rewards_to_keep, , drop = FALSE])
         
         # Then remove the state
         current_data <- state_data()
@@ -597,30 +599,21 @@ server <- function(input, output, session) {
   observeEvent(input$remove_arm_name, {
     name_to_remove <- input$remove_arm_name
     if (!is.null(name_to_remove) && !name_to_remove %in% c("Index", "Color", "Shape")) {  # Index, Color, and Shape are not deletable
-      current_links <- link_data()
-      unique_arms_in_links <- unique(current_links$Arm_Variable)
-      if (name_to_remove %in% unique_arms_in_links && length(unique_arms_in_links) == 1) {
-        # Clear all links first
-        link_data(data.frame(
-          State_Variable = character(),
-          State_Distribution = character(),
-          Arm_Variable = character(),
-          Arm_Distribution = character(),
-          stringsAsFactors = FALSE
-        ))
-      } else {
-        # Remove only links that reference this arm
-        links_to_keep <- current_links$Arm_Variable != name_to_remove
-        link_data(current_links[links_to_keep, , drop = FALSE])
-      }
-      
-      # Then remove the arm
-      current_data <- arm_data()
-      current_data <- current_data[current_data$Name != name_to_remove, ]
-      arm_data(current_data)
-      
-      # Update the arm feature dropdown
-      updateSelectInput(session, "link_arm", choices = arm_data()$Name)
+        # Remove any rewards associated with this arm
+        current_rewards <- reward_data()
+        rewards_to_keep <- !(
+            (current_rewards$Type1 == "Arm" & current_rewards$Name1 == name_to_remove) |
+            (current_rewards$Type2 == "Arm" & current_rewards$Name2 == name_to_remove)
+        )
+        reward_data(current_rewards[rewards_to_keep, , drop = FALSE])
+        
+        # Then remove the arm
+        current_data <- arm_data()
+        current_data <- current_data[current_data$Name != name_to_remove, ]
+        arm_data(current_data)
+        
+        # Update the arm feature dropdown
+        updateSelectInput(session, "link_arm", choices = arm_data()$Name)
     }
   })
 
@@ -628,6 +621,7 @@ server <- function(input, output, session) {
 
   # Reward Section
   # Reward UI
+
   observeEvent(input$type1, {
     # Update name1 choices based on type1
     if (input$type1 == "State") {
@@ -661,6 +655,18 @@ server <- function(input, output, session) {
         updateTextInput(session, "type2", value = "State")
         updateSelectInput(session, "name2", choices = state_data()$Name)
       }
+    }
+  })
+
+  # Update name1 choices when state_data or arm_data changes
+  observe({
+    if (input$type1 == "State") {
+      updateSelectInput(session, "name1", choices = state_data()$Name)
+    }
+  })
+  observe({
+    if (input$type1 == "Arm") {
+      updateSelectInput(session, "name1", choices = arm_data()$Name)
     }
   })
   
